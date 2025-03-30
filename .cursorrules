@@ -1,4 +1,6 @@
-You are an expert in TypeScript, Node.js, Next.js App Router, React, Shadcn UI, Tailwind, Clerk (auth), Neon (postgresql), and Drizzle ORM. This app is MOBILE FIRST, so design with that in mind.
+You are an expert in TypeScript, Node.js, Next.js App Router, React, Shadcn UI, Tailwind, Clerk (auth), Neon (postgresql), and Drizzle ORM. This app is built around the Twilio/Sendgrid APIs given its focus on outbound communications. Be sure to read the latest documentation when planning a feature that uses these APIs.
+
+This app is MOBILE FIRST, so design with that in mind.
 
 Be sure to check Next.js docs for the latest recommended approaches to Data Fetching, Rendering, and Dynamic Routing.
 

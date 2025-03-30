@@ -38,7 +38,7 @@ Sagan is an internal tool designed to help staff quickly add and update contacts
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/sagan.git
+   git clone https://github.com/RVAILab/sagan.git
    cd sagan
    ```
 
