@@ -21,9 +21,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RVAI Lab Vibe Coding Starter Kit",
-  description: "A modern web application starter kit created by Rogue Valley AI Lab, optimized for development in Cursor and deployment on Vercel.",
-  keywords: ["Next.js", "React", "Shadcn UI", "TypeScript", "Tailwind CSS", "Clerk", "Neon", "Drizzle", "RVAI Lab", "Vibe Coding"],
+  title: "Sagan | Contact Management Tool",
+  description: "A streamlined contact management tool for efficient SendGrid contact entry, named after Carl Sagan's novel 'Contact'.",
+  keywords: ["Contact Management", "SendGrid", "Next.js", "React", "Tailwind CSS", "RVAI Lab", "Marketing Contacts"],
   authors: [
     { name: "Rogue Valley AI Lab", url: "https://rvailab.org" },
     { name: "WhiteRabbit Ashland", url: "https://whiterabbit.ai" }

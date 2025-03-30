@@ -27,7 +27,7 @@ interface SubmissionState {
 interface DuplicateState {
   checking: boolean;
   isDuplicate: boolean;
-  contactDetails: any | null;
+  contactDetails: Record<string, unknown> | null;
 }
 
 // Common source tags that can be quickly added
@@ -262,12 +262,13 @@ export function ContactForm() {
       } else {
         throw new Error(data.error || 'Something went wrong');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred. Please try again.';
       setSubmissionState({
         isSubmitting: false,
         isSuccess: false,
         isError: true,
-        message: error.message || 'An error occurred. Please try again.',
+        message: errorMessage,
       });
     }
   };
@@ -384,7 +385,7 @@ export function ContactForm() {
               <p className="font-medium">This email already exists in your contacts!</p>
               {duplicateState.contactDetails && (
                 <p className="mt-1">
-                  Existing contact: {duplicateState.contactDetails.first_name || ''} {duplicateState.contactDetails.last_name || ''}
+                  Existing contact: {(duplicateState.contactDetails.first_name as string) || ''} {(duplicateState.contactDetails.last_name as string) || ''}
                 </p>
               )}
               <p className="mt-1">Continuing will update the existing contact.</p>

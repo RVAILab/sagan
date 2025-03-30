@@ -1,12 +1,11 @@
 # Sagan
 
-A streamlined contact management tool for efficient SendGrid contact entry, named after Carl Sagan's novel "Contact".
+An AI-centric communications center built on top of Twilio/Sendgrid, named in honor of Carl Sagan's novel "Contact".
 
-![Sagan Contact Management](./public/sagan-screenshot.png)
 
 ## Overview
 
-Sagan is an internal tool designed to help staff quickly add and update contacts in your SendGrid marketing database. Built with a focus on efficiency and user experience, it streamlines the process of collecting and managing contact information.
+Sagan is an internal tool designed to help staff quickly add and update contacts, and communicate through email and sms. Built with a focus on efficiency, quality of communications, and user experience, it streamlines the process of staying close to our community.
 
 ## Features
 

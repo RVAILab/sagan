@@ -1,8 +1,24 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { ClientRequest } from '@sendgrid/client/src/request';
 
 // Import the SendGrid client
-const client = require('@sendgrid/client');
+import client from '@sendgrid/client';
+
+interface SendGridContact {
+  first_name?: string;
+  last_name?: string;
+  email: string;
+  [key: string]: unknown;
+}
+
+interface SendGridResponse {
+  result: {
+    [email: string]: {
+      contact: SendGridContact | null;
+    };
+  };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,10 +35,10 @@ export async function POST(request: NextRequest) {
     }
     
     // Configure SendGrid client with API key
-    client.setApiKey(process.env.SENDGRID_API_KEY);
+    client.setApiKey(process.env.SENDGRID_API_KEY || '');
     
     // Set up the API request to check if the email exists
-    const sendgridRequest = {
+    const sendgridRequest: ClientRequest = {
       url: `/v3/marketing/contacts/search/emails`,
       method: 'POST',
       body: {
@@ -33,9 +49,9 @@ export async function POST(request: NextRequest) {
     console.log('Sending request to SendGrid:', sendgridRequest);
     
     // Send the request to SendGrid
-    const [response, body] = await client.request(sendgridRequest);
+    const [response, body] = await client.request(sendgridRequest) as [unknown, SendGridResponse];
     
-    console.log('SendGrid response status:', response.statusCode);
+    console.log('SendGrid response status:', response);
     console.log('SendGrid response body:', JSON.stringify(body, null, 2));
     
     // Check if the email exists - corrected logic for object structure
@@ -62,13 +78,15 @@ export async function POST(request: NextRequest) {
       },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error checking email in SendGrid:', error);
+    
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     
     return NextResponse.json(
       { 
         success: false, 
-        error: error.message || 'An error occurred while checking the email'
+        error: errorMessage
       },
       { status: 500 }
     );

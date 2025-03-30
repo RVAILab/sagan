@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, boolean, integer } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
 
 // This is just a placeholder schema, you can modify it according to your needs later
 export const contacts = pgTable('contacts', {
