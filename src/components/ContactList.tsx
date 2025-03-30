@@ -166,6 +166,9 @@ const ContactRowMemo = memo(
   }
 );
 
+// Add display name to fix linter issue
+ContactRowMemo.displayName = 'ContactRowMemo';
+
 const ContactList = () => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
@@ -181,7 +184,6 @@ const ContactList = () => {
   );
   // Add state for selected contacts and tag management
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
-  const [tagInput, setTagInput] = useState('');
   const [isUpdatingTags, setIsUpdatingTags] = useState(false);
   const [tagModalOpen, setTagModalOpen] = useState(false);
   const [tagOperation, setTagOperation] = useState<'add'|'remove'|'replace'>('add');
@@ -468,7 +470,7 @@ const ContactList = () => {
   // Reset selection when contacts or filters change
   useEffect(() => {
     clearSelection();
-  }, [contacts, searchTerm]);
+  }, [contacts, searchTerm, clearSelection]);
 
   // Tag management functions
   const addTagToContact = async (email: string, tag: string) => {
@@ -558,7 +560,7 @@ const ContactList = () => {
     
     try {
       const selectedEmails = Array.from(selectedContacts);
-      let updatedTags: Record<string, string[]> = {};
+      const updatedTags: Record<string, string[]> = {};
       
       // Build updated tags for each contact based on operation
       for (const email of selectedEmails) {
