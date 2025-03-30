@@ -17,7 +17,7 @@ interface Contact {
   create_at: string;
   updated_at: string;
   source: string;
-  [key: string]: string;
+  [key: string]: string | string[];
 }
 
 // Mock data for when we need it
@@ -46,7 +46,7 @@ for (let i = 0; i < 100; i++) {
 const gunzipAsync = promisify(gunzip);
 
 // Manual CSV parser for contacts
-function parseCSVToContacts(csvData: string): any[] {
+function parseCSVToContacts(csvData: string): Contact[] {
   try {
     // Split by lines
     const lines = csvData.split(/\r?\n/).filter(line => line.trim());
@@ -63,7 +63,7 @@ function parseCSVToContacts(csvData: string): any[] {
     );
     
     // Parse data rows
-    const contacts = [];
+    const contacts: Contact[] = [];
     
     for (let i = 1; i < lines.length; i++) {
       const values = parseCSVLine(lines[i]);
@@ -75,7 +75,7 @@ function parseCSVToContacts(csvData: string): any[] {
       }
       
       // Create record object
-      const record: any = {};
+      const record: Record<string, string | string[]> = {};
       headers.forEach((header, index) => {
         record[header] = values[index];
       });
@@ -83,7 +83,7 @@ function parseCSVToContacts(csvData: string): any[] {
       // Process tags if they exist
       if (record.tags) {
         try {
-          let tagsString = record.tags;
+          let tagsString = record.tags as string;
           
           // If it's already a string with quotes, parse it
           if (typeof tagsString === 'string' && tagsString.includes('""')) {
@@ -103,7 +103,7 @@ function parseCSVToContacts(csvData: string): any[] {
         }
       }
       
-      contacts.push(record);
+      contacts.push(record as unknown as Contact);
     }
     
     return contacts;
@@ -181,7 +181,8 @@ export async function POST(request: NextRequest) {
           // Decompress the buffer
           const decompressed = await gunzipAsync(bufferData);
           dataString = decompressed.toString('utf-8');
-        } catch (gzipError) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        } catch (_gzipError) {
           // If decompression fails, try to use the raw data (might not be compressed)
           console.warn('Gzip decompression failed, trying to use raw data');
           dataString = bufferData.toString('utf-8');
@@ -235,7 +236,8 @@ export async function POST(request: NextRequest) {
               }
               
               contacts.push(contact);
-            } catch (parseError) {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            } catch (_parseError) {
               // Skip lines that can't be parsed
               console.error('Error parsing JSON line, skipping');
             }
