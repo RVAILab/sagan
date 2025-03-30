@@ -18,6 +18,7 @@ Sagan is an internal tool designed to help staff quickly add and update contacts
 - **Mobile Friendly**: Responsive design works on all devices
 - **Contacts Management**: Browse, search, sort, and filter your contacts list with customizable columns
 - **Bulk Operations**: Select multiple contacts for batch operations
+- **Offline Capable**: Contacts are cached locally for faster loading and offline access
 
 ## Technology Stack
 
@@ -88,6 +89,16 @@ The application handles the following data formats from SendGrid:
 - NDJSON (Newline Delimited JSON) for contact exports
 - Gzipped content for efficient data transfer
 - Standard JSON for API responses
+
+### Local Storage Caching
+
+To improve performance and provide limited offline capabilities:
+
+- Contacts data is cached in the browser's localStorage
+- Initial page loads use cached data if available and less than 1 hour old
+- Background refresh occurs for cached data older than 10 minutes
+- Cache reduces API calls to SendGrid and speeds up page loads
+- Approximately 5-10MB of storage is used depending on contacts volume
 
 ### Setting Up Your SendGrid Account
 

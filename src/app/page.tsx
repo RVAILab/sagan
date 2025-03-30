@@ -16,7 +16,7 @@ export default function Home() {
       <footer className="py-4 border-t bg-white">
         <div className="container mx-auto px-4">
           <p className="text-xs text-muted-foreground">
-            Sagan | SendGrid Marketing Contacts API Integration | Internal Use Only
+            Sagan | Communications HQ
           </p>
         </div>
       </footer>

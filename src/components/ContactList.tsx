@@ -20,7 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/components/ui";
-import { Settings } from 'lucide-react';
+import { Settings, Search } from 'lucide-react';
 
 interface Contact {
   id?: string;
@@ -68,12 +68,64 @@ export function ContactList({ initialContacts = [] }: ContactListProps) {
   ]));
   const [exportUrls, setExportUrls] = useState<string[]>([]);
   const [exportStatus, setExportStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [usingCachedData, setUsingCachedData] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   // Fetch contacts from the API
   const fetchContacts = async () => {
     setLoading(true);
+    
     try {
-      console.log('Starting contacts fetch...');
+      // Check if we have cached contacts
+      const cachedData = localStorage.getItem('sagan_contacts');
+      const cachedTimestamp = localStorage.getItem('sagan_contacts_timestamp');
+      const now = new Date().getTime();
+      
+      // Use cache if it exists and is less than 1 hour old
+      const cacheAge = cachedTimestamp ? now - parseInt(cachedTimestamp) : Infinity;
+      const cacheValid = cacheAge < 60 * 60 * 1000; // 1 hour in milliseconds
+      
+      if (cachedData && cacheValid) {
+        console.log('Using cached contacts data from localStorage');
+        const parsedData = JSON.parse(cachedData);
+        setContacts(parsedData);
+        applyFiltersAndSort(parsedData, searchTerm, sortField, sortDirection);
+        setLoading(false);
+        setUsingCachedData(true);
+        
+        if (cachedTimestamp) {
+          const date = new Date(parseInt(cachedTimestamp));
+          setLastUpdated(date.toLocaleString());
+        }
+        
+        // Optionally, refresh in background if cache is older than 10 minutes
+        if (cacheAge > 10 * 60 * 1000) {
+          console.log('Cache is older than 10 minutes, refreshing in background');
+          refreshContactsFromAPI(false);
+        }
+        
+        return;
+      }
+      
+      // If no valid cache, fetch from API
+      await refreshContactsFromAPI(true);
+      
+    } catch (error) {
+      console.error('Error fetching contacts:', error);
+      setLoading(false);
+    }
+  };
+
+  // New function to refresh contacts from API
+  const refreshContactsFromAPI = async (showLoading: boolean) => {
+    if (showLoading) {
+      setLoading(true);
+    }
+    
+    setUsingCachedData(false);
+    
+    try {
+      console.log('Starting contacts fetch from API...');
       
       // First start the export job
       const exportResponse = await fetch('/api/contacts/get-all');
@@ -83,7 +135,7 @@ export function ContactList({ initialContacts = [] }: ContactListProps) {
       
       if (!exportData.success || !exportData.urls || exportData.urls.length === 0) {
         console.error('Failed to export contacts', exportData);
-        setLoading(false);
+        if (showLoading) setLoading(false);
         return;
       }
       
@@ -104,20 +156,27 @@ export function ContactList({ initialContacts = [] }: ContactListProps) {
       
       if (!downloadData.success || !downloadData.data) {
         console.error('Failed to download contacts', downloadData);
-        setLoading(false);
+        if (showLoading) setLoading(false);
         return;
       }
       
       // Set the contacts
       const fetchedContacts = downloadData.data.contacts || [];
-      console.log(`Retrieved ${fetchedContacts.length} contacts`);
+      console.log(`Retrieved ${fetchedContacts.length} contacts from API`);
+      
+      // Cache the data in localStorage
+      localStorage.setItem('sagan_contacts', JSON.stringify(fetchedContacts));
+      const timestamp = new Date().getTime();
+      localStorage.setItem('sagan_contacts_timestamp', timestamp.toString());
+      setLastUpdated(new Date(timestamp).toLocaleString());
+      console.log('Contacts data cached to localStorage');
       
       setContacts(fetchedContacts);
       applyFiltersAndSort(fetchedContacts, searchTerm, sortField, sortDirection);
-      setLoading(false);
+      if (showLoading) setLoading(false);
     } catch (error) {
-      console.error('Error fetching contacts:', error);
-      setLoading(false);
+      console.error('Error refreshing contacts from API:', error);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -241,47 +300,63 @@ export function ContactList({ initialContacts = [] }: ContactListProps) {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row justify-between gap-4">
-        <div className="w-full sm:w-1/3">
-          <Input
-            placeholder="Search contacts..."
-            value={searchTerm}
-            onChange={handleSearchChange}
-            className="w-full"
-          />
+    <div className="container mx-auto py-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-4">
+        <div>
+          <h1 className="text-2xl font-bold">Contacts</h1>
+          {lastUpdated && (
+            <div className="text-sm text-gray-500 mt-1 flex items-center">
+              <span>Last updated: {lastUpdated}</span>
+              {usingCachedData && (
+                <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs">
+                  Cached
+                </span>
+              )}
+            </div>
+          )}
         </div>
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => fetchContacts()}
-          >
-            Refresh
-          </Button>
-          
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Settings className="h-4 w-4 mr-2" />
-                Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {ALL_COLUMNS.map((column) => (
-                <DropdownMenuCheckboxItem
-                  key={column.id}
-                  checked={visibleColumns.has(column.id)}
-                  onCheckedChange={() => toggleColumn(column.id)}
-                  disabled={column.id === 'email'} // Email is required
-                >
-                  {column.label}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="relative w-full sm:w-64">
+            <Input
+              type="text"
+              placeholder="Search contacts..."
+              value={searchTerm}
+              onChange={handleSearchChange}
+              className="pl-8 w-full"
+            />
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+          </div>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => refreshContactsFromAPI(true)}
+              disabled={loading}
+              className="text-sm shrink-0"
+            >
+              {loading ? 'Loading...' : 'Refresh'}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="text-sm">
+                  Columns
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {ALL_COLUMNS.map((column) => (
+                  <DropdownMenuCheckboxItem
+                    key={column.id}
+                    checked={visibleColumns.has(column.id)}
+                    onCheckedChange={() => toggleColumn(column.id)}
+                    disabled={column.id === 'email'} // Email is required
+                  >
+                    {column.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
       
