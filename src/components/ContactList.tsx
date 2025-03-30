@@ -3,8 +3,8 @@
 import { ChangeEvent, useEffect, useState } from "react";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -34,6 +34,22 @@ interface Contact {
   [key: string]: string | undefined;
 }
 
+// Define column configuration
+interface Column {
+  key: keyof Contact;
+  label: string;
+}
+
+const AVAILABLE_COLUMNS: Column[] = [
+  { key: "email", label: "Email" },
+  { key: "first_name", label: "First Name" },
+  { key: "last_name", label: "Last Name" },
+  { key: "phone_number", label: "Phone" },
+  { key: "city", label: "City" },
+  { key: "state_province_region", label: "State" },
+  { key: "country", label: "Country" }
+];
+
 const ContactList = () => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
@@ -43,12 +59,45 @@ const ContactList = () => {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [usingCachedData, setUsingCachedData] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [visibleColumns, setVisibleColumns] = useState<Set<keyof Contact>>(
+    new Set(["email", "first_name", "last_name"])
+  );
+
+  // Toggle column visibility
+  const toggleColumn = (column: keyof Contact) => {
+    const newVisibleColumns = new Set(visibleColumns);
+    
+    if (newVisibleColumns.has(column)) {
+      // Don't allow hiding email - it's the primary identifier
+      if (column !== "email") {
+        newVisibleColumns.delete(column);
+      }
+    } else {
+      newVisibleColumns.add(column);
+    }
+    
+    setVisibleColumns(newVisibleColumns);
+    
+    // Save visible columns preference to localStorage
+    localStorage.setItem('sagan_visible_columns', JSON.stringify(Array.from(newVisibleColumns)));
+  };
 
   // Fetch contacts from the API
   const fetchContacts = async () => {
     setLoading(true);
     
     try {
+      // Check if we have cached columns preference
+      const columnsPreference = localStorage.getItem('sagan_visible_columns');
+      if (columnsPreference) {
+        try {
+          const savedColumns = JSON.parse(columnsPreference) as string[];
+          setVisibleColumns(new Set(savedColumns));
+        } catch (e) {
+          console.error('Error parsing saved columns preference:', e);
+        }
+      }
+      
       // Check if we have cached contacts
       const cachedData = localStorage.getItem('sagan_contacts');
       const cachedTimestamp = localStorage.getItem('sagan_contacts_timestamp');
@@ -249,18 +298,16 @@ const ContactList = () => {
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  Name
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  Email
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  Phone
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  Location
-                </DropdownMenuItem>
+                {AVAILABLE_COLUMNS.map((column) => (
+                  <DropdownMenuCheckboxItem
+                    key={column.key}
+                    checked={visibleColumns.has(column.key)}
+                    onCheckedChange={() => toggleColumn(column.key)}
+                    disabled={column.key === "email"} // Can't hide email
+                  >
+                    {column.label}
+                  </DropdownMenuCheckboxItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -276,66 +323,31 @@ const ContactList = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead
-                  className={`cursor-pointer ${sortField === "email" ? "font-bold" : ""}`}
-                  onClick={() => handleSortChange("email")}
-                >
-                  Email {sortField === "email" && (sortDirection === "asc" ? "↑" : "↓")}
-                </TableHead>
-                <TableHead
-                  className={`cursor-pointer ${sortField === "first_name" ? "font-bold" : ""}`}
-                  onClick={() => handleSortChange("first_name")}
-                >
-                  First Name {sortField === "first_name" && (sortDirection === "asc" ? "↑" : "↓")}
-                </TableHead>
-                <TableHead
-                  className={`cursor-pointer ${sortField === "last_name" ? "font-bold" : ""}`}
-                  onClick={() => handleSortChange("last_name")}
-                >
-                  Last Name {sortField === "last_name" && (sortDirection === "asc" ? "↑" : "↓")}
-                </TableHead>
-                <TableHead
-                  className={`cursor-pointer ${sortField === "phone_number" ? "font-bold" : ""}`}
-                  onClick={() => handleSortChange("phone_number")}
-                >
-                  Phone {sortField === "phone_number" && (sortDirection === "asc" ? "↑" : "↓")}
-                </TableHead>
-                <TableHead
-                  className={`cursor-pointer ${sortField === "city" ? "font-bold" : ""}`}
-                  onClick={() => handleSortChange("city")}
-                >
-                  City {sortField === "city" && (sortDirection === "asc" ? "↑" : "↓")}
-                </TableHead>
-                <TableHead
-                  className={`cursor-pointer ${sortField === "state_province_region" ? "font-bold" : ""}`}
-                  onClick={() => handleSortChange("state_province_region")}
-                >
-                  State {sortField === "state_province_region" && (sortDirection === "asc" ? "↑" : "↓")}
-                </TableHead>
-                <TableHead
-                  className={`cursor-pointer ${sortField === "country" ? "font-bold" : ""}`}
-                  onClick={() => handleSortChange("country")}
-                >
-                  Country {sortField === "country" && (sortDirection === "asc" ? "↑" : "↓")}
-                </TableHead>
+                {AVAILABLE_COLUMNS.filter(col => visibleColumns.has(col.key)).map(column => (
+                  <TableHead
+                    key={column.key}
+                    className={`cursor-pointer ${sortField === column.key ? "font-bold" : ""}`}
+                    onClick={() => handleSortChange(column.key)}
+                  >
+                    {column.label} {sortField === column.key && (sortDirection === "asc" ? "↑" : "↓")}
+                  </TableHead>
+                ))}
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredContacts.length > 0 ? (
                 filteredContacts.map((contact, index) => (
                   <TableRow key={index}>
-                    <TableCell>{contact.email}</TableCell>
-                    <TableCell>{contact.first_name || "-"}</TableCell>
-                    <TableCell>{contact.last_name || "-"}</TableCell>
-                    <TableCell>{contact.phone_number || "-"}</TableCell>
-                    <TableCell>{contact.city || "-"}</TableCell>
-                    <TableCell>{contact.state_province_region || "-"}</TableCell>
-                    <TableCell>{contact.country || "-"}</TableCell>
+                    {AVAILABLE_COLUMNS.filter(col => visibleColumns.has(col.key)).map(column => (
+                      <TableCell key={column.key}>
+                        {contact[column.key] || "-"}
+                      </TableCell>
+                    ))}
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
+                  <TableCell colSpan={visibleColumns.size} className="text-center py-8">
                     {searchTerm ? "No contacts found matching your search" : "No contacts found"}
                   </TableCell>
                 </TableRow>
