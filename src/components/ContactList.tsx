@@ -1,73 +1,46 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { 
-  Button,
-  Input,
-  Card,
-  Table, 
-  TableBody, 
-  TableCaption, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow,
-  Skeleton,
+import { ChangeEvent, useEffect, useState } from "react";
+import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
+  Input,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Button
 } from "@/components/ui";
-import { Settings, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 
 interface Contact {
-  id?: string;
   email: string;
   first_name?: string;
   last_name?: string;
   phone_number?: string;
+  address_line_1?: string;
   city?: string;
   state_province_region?: string;
-  country?: string;
   postal_code?: string;
+  country?: string;
   created_at?: string;
   updated_at?: string;
-  [key: string]: any;
+  [key: string]: string | undefined;
 }
 
-interface ContactListProps {
-  initialContacts?: Contact[];
-}
-
-// Define all available columns
-const ALL_COLUMNS = [
-  { id: 'email', label: 'Email' },
-  { id: 'first_name', label: 'First Name' },
-  { id: 'last_name', label: 'Last Name' },
-  { id: 'phone_number', label: 'Phone' },
-  { id: 'city', label: 'City' },
-  { id: 'state_province_region', label: 'State' },
-  { id: 'country', label: 'Country' },
-  { id: 'postal_code', label: 'Postal Code' },
-  { id: 'created_at', label: 'Created' },
-  { id: 'updated_at', label: 'Updated' },
-];
-
-export function ContactList({ initialContacts = [] }: ContactListProps) {
+const ContactList = () => {
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
-  const [contacts, setContacts] = useState<Contact[]>(initialContacts);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filteredContacts, setFilteredContacts] = useState<Contact[]>(contacts);
-  const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
-  const [sortField, setSortField] = useState<string>('email');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set([
-    'email', 'first_name', 'last_name', 'phone_number'
-  ]));
-  const [exportUrls, setExportUrls] = useState<string[]>([]);
-  const [exportStatus, setExportStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortField, setSortField] = useState<keyof Contact>("email");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [usingCachedData, setUsingCachedData] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
@@ -139,9 +112,6 @@ export function ContactList({ initialContacts = [] }: ContactListProps) {
         return;
       }
       
-      setExportUrls(exportData.urls);
-      console.log(`Got ${exportData.urls.length} export URLs`);
-      
       // Download the first URL (for now just handling one file)
       const downloadResponse = await fetch('/api/contacts/download', {
         method: 'POST',
@@ -180,124 +150,59 @@ export function ContactList({ initialContacts = [] }: ContactListProps) {
     }
   };
 
-  // Apply filters and sorting
-  const applyFiltersAndSort = (
-    contactsList: Contact[], 
-    search: string, 
-    field: string, 
-    direction: 'asc' | 'desc'
-  ) => {
-    // Filter contacts
-    const filtered = search 
-      ? contactsList.filter(contact => {
-          const searchLower = search.toLowerCase();
-          return (
-            (contact.email && contact.email.toLowerCase().includes(searchLower)) ||
-            (contact.first_name && contact.first_name.toLowerCase().includes(searchLower)) ||
-            (contact.last_name && contact.last_name.toLowerCase().includes(searchLower)) ||
-            (contact.phone_number && contact.phone_number.includes(search))
-          );
-        })
-      : [...contactsList];
-    
-    // Sort contacts
-    const sorted = [...filtered].sort((a, b) => {
-      const aValue = a[field] || '';
-      const bValue = b[field] || '';
-      
-      if (direction === 'asc') {
-        return aValue.localeCompare(bValue);
-      } else {
-        return bValue.localeCompare(aValue);
-      }
-    });
-    
-    setFilteredContacts(sorted);
-  };
-
-  // Handle search input change
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchTerm(value);
     applyFiltersAndSort(contacts, value, sortField, sortDirection);
   };
 
-  // Handle sorting when clicking column headers
-  const handleSort = (field: string) => {
-    const newDirection = field === sortField && sortDirection === 'asc' ? 'desc' : 'asc';
+  const handleSortChange = (field: keyof Contact) => {
+    const newDirection = field === sortField && sortDirection === "asc" ? "desc" : "asc";
     setSortField(field);
     setSortDirection(newDirection);
     applyFiltersAndSort(contacts, searchTerm, field, newDirection);
   };
 
-  // Toggle column visibility
-  const toggleColumn = (column: string) => {
-    const newColumns = new Set(visibleColumns);
-    if (newColumns.has(column)) {
-      // Don't allow removing the email column - it's required
-      if (column !== 'email') {
-        newColumns.delete(column);
+  const applyFiltersAndSort = (
+    data: Contact[],
+    search: string,
+    sortBy: keyof Contact,
+    direction: "asc" | "desc"
+  ) => {
+    let filtered = data;
+
+    // Apply search filter
+    if (search) {
+      const lowerSearch = search.toLowerCase();
+      filtered = data.filter((contact) => {
+        return Object.values(contact).some((value) => {
+          if (!value) return false;
+          return value.toString().toLowerCase().includes(lowerSearch);
+        });
+      });
+    }
+
+    // Apply sorting
+    filtered = [...filtered].sort((a, b) => {
+      const aValue = a[sortBy] || "";
+      const bValue = b[sortBy] || "";
+
+      if (direction === "asc") {
+        return aValue.localeCompare(bValue);
+      } else {
+        return bValue.localeCompare(aValue);
       }
-    } else {
-      newColumns.add(column);
-    }
-    setVisibleColumns(newColumns);
+    });
+
+    setFilteredContacts(filtered);
   };
 
-  // Toggle selection of a contact
-  const toggleContactSelection = (email: string) => {
-    const newSelected = new Set(selectedContacts);
-    if (newSelected.has(email)) {
-      newSelected.delete(email);
-    } else {
-      newSelected.add(email);
-    }
-    setSelectedContacts(newSelected);
-  };
-
-  // Toggle selection of all contacts
-  const toggleSelectAll = () => {
-    if (selectedContacts.size === filteredContacts.length) {
-      setSelectedContacts(new Set());
-    } else {
-      setSelectedContacts(new Set(filteredContacts.map(c => c.email)));
-    }
-  };
-
-  // Initial fetch
+  // Fetch contacts on component mount
   useEffect(() => {
     fetchContacts();
+    // We only want to fetch contacts on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Loading state UI
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <Skeleton className="h-8 w-[200px]" />
-          <Skeleton className="h-10 w-[150px]" />
-        </div>
-        <div className="border rounded-md">
-          <div className="flex items-center p-4 border-b">
-            <Skeleton className="h-4 w-4 mr-2" />
-            <Skeleton className="h-4 w-[100px] mr-4" />
-            <Skeleton className="h-4 w-[150px] mr-4" />
-            <Skeleton className="h-4 w-[150px] mr-4" />
-            <Skeleton className="h-4 w-[120px]" />
-          </div>
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="flex items-center p-4 border-b">
-              <Skeleton className="h-4 w-4 mr-2" />
-              <Skeleton className="h-4 w-[100px] mr-4" />
-              <Skeleton className="h-4 w-[150px] mr-4" />
-              <Skeleton className="h-4 w-[150px] mr-4" />
-              <Skeleton className="h-4 w-[120px]" />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="container mx-auto py-4">
@@ -344,93 +249,103 @@ export function ContactList({ initialContacts = [] }: ContactListProps) {
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {ALL_COLUMNS.map((column) => (
-                  <DropdownMenuCheckboxItem
-                    key={column.id}
-                    checked={visibleColumns.has(column.id)}
-                    onCheckedChange={() => toggleColumn(column.id)}
-                    disabled={column.id === 'email'} // Email is required
-                  >
-                    {column.label}
-                  </DropdownMenuCheckboxItem>
-                ))}
+                <DropdownMenuItem>
+                  Name
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  Email
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  Phone
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  Location
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </div>
       </div>
-      
-      <Card className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[40px]">
-                <input
-                  type="checkbox"
-                  checked={selectedContacts.size === filteredContacts.length && filteredContacts.length > 0}
-                  onChange={toggleSelectAll}
-                  className="h-4 w-4"
-                />
-              </TableHead>
-              {ALL_COLUMNS.filter(col => visibleColumns.has(col.id)).map(column => (
-                <TableHead 
-                  key={column.id}
-                  className="cursor-pointer"
-                  onClick={() => handleSort(column.id)}
-                >
-                  {column.label} {sortField === column.id && (sortDirection === 'asc' ? '↑' : '↓')}
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredContacts.length === 0 ? (
+
+      {loading ? (
+        <div className="flex justify-center p-8">
+          <div className="animate-spin h-8 w-8 border-4 border-gray-300 rounded-full border-t-blue-600"></div>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={1 + visibleColumns.size} className="h-24 text-center">
-                  No contacts found
-                </TableCell>
+                <TableHead
+                  className={`cursor-pointer ${sortField === "email" ? "font-bold" : ""}`}
+                  onClick={() => handleSortChange("email")}
+                >
+                  Email {sortField === "email" && (sortDirection === "asc" ? "↑" : "↓")}
+                </TableHead>
+                <TableHead
+                  className={`cursor-pointer ${sortField === "first_name" ? "font-bold" : ""}`}
+                  onClick={() => handleSortChange("first_name")}
+                >
+                  First Name {sortField === "first_name" && (sortDirection === "asc" ? "↑" : "↓")}
+                </TableHead>
+                <TableHead
+                  className={`cursor-pointer ${sortField === "last_name" ? "font-bold" : ""}`}
+                  onClick={() => handleSortChange("last_name")}
+                >
+                  Last Name {sortField === "last_name" && (sortDirection === "asc" ? "↑" : "↓")}
+                </TableHead>
+                <TableHead
+                  className={`cursor-pointer ${sortField === "phone_number" ? "font-bold" : ""}`}
+                  onClick={() => handleSortChange("phone_number")}
+                >
+                  Phone {sortField === "phone_number" && (sortDirection === "asc" ? "↑" : "↓")}
+                </TableHead>
+                <TableHead
+                  className={`cursor-pointer ${sortField === "city" ? "font-bold" : ""}`}
+                  onClick={() => handleSortChange("city")}
+                >
+                  City {sortField === "city" && (sortDirection === "asc" ? "↑" : "↓")}
+                </TableHead>
+                <TableHead
+                  className={`cursor-pointer ${sortField === "state_province_region" ? "font-bold" : ""}`}
+                  onClick={() => handleSortChange("state_province_region")}
+                >
+                  State {sortField === "state_province_region" && (sortDirection === "asc" ? "↑" : "↓")}
+                </TableHead>
+                <TableHead
+                  className={`cursor-pointer ${sortField === "country" ? "font-bold" : ""}`}
+                  onClick={() => handleSortChange("country")}
+                >
+                  Country {sortField === "country" && (sortDirection === "asc" ? "↑" : "↓")}
+                </TableHead>
               </TableRow>
-            ) : (
-              filteredContacts.map((contact) => (
-                <TableRow key={contact.email}>
-                  <TableCell>
-                    <input
-                      type="checkbox"
-                      checked={selectedContacts.has(contact.email)}
-                      onChange={() => toggleContactSelection(contact.email)}
-                      className="h-4 w-4"
-                    />
+            </TableHeader>
+            <TableBody>
+              {filteredContacts.length > 0 ? (
+                filteredContacts.map((contact, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{contact.email}</TableCell>
+                    <TableCell>{contact.first_name || "-"}</TableCell>
+                    <TableCell>{contact.last_name || "-"}</TableCell>
+                    <TableCell>{contact.phone_number || "-"}</TableCell>
+                    <TableCell>{contact.city || "-"}</TableCell>
+                    <TableCell>{contact.state_province_region || "-"}</TableCell>
+                    <TableCell>{contact.country || "-"}</TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8">
+                    {searchTerm ? "No contacts found matching your search" : "No contacts found"}
                   </TableCell>
-                  {ALL_COLUMNS.filter(col => visibleColumns.has(col.id)).map(column => (
-                    <TableCell key={column.id}>
-                      {column.id === 'created_at' || column.id === 'updated_at'
-                        ? (contact[column.id] 
-                            ? new Date(contact[column.id] as string).toLocaleDateString() 
-                            : '-')
-                        : (contact[column.id] || '-')}
-                    </TableCell>
-                  ))}
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Card>
-      
-      <div className="flex justify-between items-center">
-        <div>
-          <p className="text-sm text-gray-500">
-            {selectedContacts.size} selected of {filteredContacts.length} contacts
-          </p>
+              )}
+            </TableBody>
+          </Table>
         </div>
-        <div className="flex gap-2">
-          {selectedContacts.size > 0 && (
-            <Button variant="destructive" size="sm">
-              Delete Selected
-            </Button>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
-} 
+};
+
+export default ContactList; 

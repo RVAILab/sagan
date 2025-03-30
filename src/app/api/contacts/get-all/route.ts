@@ -1,85 +1,131 @@
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-import { ClientRequest } from '@sendgrid/client/src/request';
 
-// Import the SendGrid client
-import client from '@sendgrid/client';
-
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    // Configure SendGrid client with API key
-    client.setApiKey(process.env.SENDGRID_API_KEY || '');
+    // Get API key from environment
+    const apiKey = process.env.SENDGRID_API_KEY;
     
-    console.log('Requesting contact export from SendGrid...');
-    
-    // Start a new export job (with all contacts, no filtering)
-    const exportRequest: ClientRequest = {
-      url: '/v3/marketing/contacts/exports',
-      method: 'POST',
-      body: {
-        file_type: 'json'
-      }
-    };
-    
-    // Send the export request
-    const [exportResponse, exportBody] = await client.request(exportRequest);
-    
-    // Log the response for debugging
-    console.log('Export response:', exportResponse.statusCode);
-    console.log('Export body:', JSON.stringify(exportBody, null, 2));
-    
-    // Get the export ID
-    const exportId = exportBody?.id;
-    
-    if (!exportId) {
+    if (!apiKey) {
+      console.error('SENDGRID_API_KEY not found in environment variables');
       return NextResponse.json(
-        { success: false, error: 'Failed to start export job' },
+        { success: false, error: 'API key not configured' },
         { status: 500 }
       );
     }
+
+    // Use SendGrid export endpoint to get all contacts
+    const exportUrl = 'https://api.sendgrid.com/v3/marketing/contacts/exports';
     
-    // Function to check export status
-    const checkExportStatus = async (id: string): Promise<string[]> => {
-      const statusRequest: ClientRequest = {
-        url: `/v3/marketing/contacts/exports/${id}`,
-        method: 'GET'
-      };
+    try {
+      const response = await fetch(exportUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          // Request all fields for each contact
+          field_selections: ["*"]
+        })
+      });
       
-      // Check status until URLs are available
-      const [statusResponse, statusBody] = await client.request(statusRequest);
-      
-      console.log('Status check response:', statusResponse.statusCode);
-      console.log('Status body:', JSON.stringify(statusBody, null, 2));
-      
-      if (statusBody?.urls?.length > 0) {
-        return statusBody.urls;
+      // Handle API errors
+      if (!response.ok) {
+        console.error('SendGrid API error:', {
+          status: response.status,
+          statusText: response.statusText
+        });
+        
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: `SendGrid API error: ${response.statusText}`,
+            status: response.status
+          },
+          { status: response.status }
+        );
       }
       
-      // Wait 2 seconds before checking again
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      return checkExportStatus(id);
-    };
-    
-    // Get the export URLs (may take some time)
-    const urls = await checkExportStatus(exportId);
-    console.log('Final URLs:', urls);
-    
-    // Return the URLs as JSON
-    return NextResponse.json({
-      success: true,
-      exportId,
-      urls
-    });
-  } catch (error: unknown) {
-    console.error('Error getting contacts from SendGrid:', error);
-    
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      // Parse the successful response
+      const data = await response.json();
+      
+      // The response includes an ID for the export job
+      if (!data.id) {
+        return NextResponse.json(
+          { success: false, error: 'No export ID returned from SendGrid' },
+          { status: 500 }
+        );
+      }
+      
+      // Now we need to get the status of the export job
+      const statusUrl = `https://api.sendgrid.com/v3/marketing/contacts/exports/${data.id}`;
+      
+      // Wait for the export job to complete (this can take a few seconds)
+      let exportComplete = false;
+      let exportData = null;
+      let attempts = 0;
+      const MAX_ATTEMPTS = 10; // Maximum number of attempts to check status
+      
+      while (!exportComplete && attempts < MAX_ATTEMPTS) {
+        attempts++;
+        
+        // Sleep for 1 second between attempts
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const statusResponse = await fetch(statusUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`
+          }
+        });
+        
+        if (!statusResponse.ok) {
+          console.error('Error checking export status:', statusResponse.statusText);
+          continue;
+        }
+        
+        exportData = await statusResponse.json();
+        
+        // Check if the export is complete
+        if (exportData.status === 'ready') {
+          exportComplete = true;
+        }
+      }
+      
+      // If we reached max attempts without completion
+      if (!exportComplete) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'Export is taking too long to complete', 
+            status: exportData?.status || 'unknown'
+          },
+          { status: 408 } // Request Timeout
+        );
+      }
+      
+      // Return the download URLs for the exported contacts
+      return NextResponse.json({
+        success: true,
+        urls: exportData.urls,
+        exportId: data.id
+      });
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error('Error getting all contacts:', errorMessage);
+      
+      return NextResponse.json(
+        { success: false, error: errorMessage },
+        { status: 500 }
+      );
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    console.error('Server error in get-all route:', errorMessage);
     
     return NextResponse.json(
-      { 
-        success: false, 
-        error: errorMessage
-      },
+      { success: false, error: 'Server error' },
       { status: 500 }
     );
   }
