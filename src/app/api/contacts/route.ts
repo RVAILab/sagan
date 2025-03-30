@@ -28,11 +28,10 @@ export async function POST(request: NextRequest) {
           country: formData.country || '',
           postal_code: formData.postalCode || '',
           phone_number: formData.phone || '',
-          // Add tags - SendGrid expects this format
+          // Convert tags array to comma-separated string for SendGrid
           custom_fields: {
-            // This assumes you've created a custom field in SendGrid for 'tags'
-            // You may need to adjust the field ID based on your SendGrid account
-            tags: formData.tags || []
+            // SendGrid expects 'tags' as a Text type, not an array
+            tags: Array.isArray(formData.tags) ? formData.tags.join(', ') : ''
           }
         }
       ]
@@ -48,9 +47,19 @@ export async function POST(request: NextRequest) {
     };
     
     // Send the request to SendGrid
-    const [, body] = await client.request(sendgridRequest);
+    const [response, body] = await client.request(sendgridRequest);
     
-    console.log('SendGrid response:', body);
+    // Check if the response status is successful (2xx)
+    const statusCode = response?.statusCode || 500;
+    if (statusCode < 200 || statusCode >= 300) {
+      console.error('SendGrid API error:', body);
+      return NextResponse.json({ 
+        success: false, 
+        error: `SendGrid API returned status ${statusCode}: ${JSON.stringify(body)}` 
+      }, { status: statusCode });
+    }
+    
+    console.log('SendGrid response:', JSON.stringify(body, null, 2));
     
     // Store in database using Drizzle
     try {

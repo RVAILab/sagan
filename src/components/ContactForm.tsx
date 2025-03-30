@@ -30,12 +30,75 @@ interface DuplicateState {
   contactDetails: Record<string, unknown> | null;
 }
 
+interface PendingJob {
+  jobId: string;
+  email: string;
+  name: string;
+  createdAt: number;
+  status?: string;
+  errorInfo?: {
+    erroredCount?: number;
+    requestedCount?: number;
+    errorDetails?: string;
+    errorMessage?: string;
+  };
+}
+
 // Common source tags that can be quickly added
 const COMMON_TAGS = ['meetup', 'passerby', 'partner', 'friend', 'social', 'event', 'website'];
+
+const STORAGE_KEY = 'sagan_pending_jobs';
+
+// Functions to manage pending jobs in localStorage
+const getPendingJobs = (): PendingJob[] => {
+  if (typeof window === 'undefined') return [];
+  
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch (err) {
+    console.error('Error retrieving pending jobs from localStorage:', err);
+    return [];
+  }
+};
+
+const savePendingJobs = (jobs: PendingJob[]) => {
+  if (typeof window === 'undefined') return;
+  
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs));
+  } catch (err) {
+    console.error('Error saving pending jobs to localStorage:', err);
+  }
+};
+
+const addPendingJob = (job: PendingJob) => {
+  const currentJobs = getPendingJobs();
+  
+  // Add the new job to the beginning of the array
+  const updatedJobs = [job, ...currentJobs];
+  
+  // Keep only the 20 most recent jobs
+  const trimmedJobs = updatedJobs.slice(0, 20);
+  
+  savePendingJobs(trimmedJobs);
+  return trimmedJobs;
+};
+
+const updatePendingJobStatus = (jobId: string, status: string) => {
+  const currentJobs = getPendingJobs();
+  const updatedJobs = currentJobs.map(job => 
+    job.jobId === jobId ? { ...job, status } : job
+  );
+  
+  savePendingJobs(updatedJobs);
+  return updatedJobs;
+};
 
 export function ContactForm() {
   const firstNameInputRef = useRef<HTMLInputElement>(null);
   const emailCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [refreshPendingJobs, setRefreshPendingJobs] = useState(0);
 
   const [formData, setFormData] = useState<FormState>({
     firstName: '',
@@ -237,28 +300,64 @@ export function ContactForm() {
 
       const data = await response.json();
 
-      if (data.success) {
+      if (data.success && data.jobId) {
         // Increment contacts added count
         setContactsAdded(prev => prev + 1);
         
-        // Show brief success message
+        // Add to pending jobs in localStorage
+        const newJob: PendingJob = {
+          jobId: data.jobId,
+          email: formData.email,
+          name: `${formData.firstName} ${formData.lastName}`.trim(),
+          createdAt: Date.now()
+        };
+        
+        addPendingJob(newJob);
+        setRefreshPendingJobs(prev => prev + 1);
+        
+        // Show submission received message
         setSubmissionState({
           isSubmitting: false,
           isSuccess: true,
           isError: false,
-          message: `Contact ${duplicateState.isDuplicate ? 'updated' : 'added'} successfully! (${formData.email})`,
+          message: `Contact submitted for processing! Job ID: ${data.jobId}`,
         });
+        
+        // Check job status after a short delay
+        setTimeout(async () => {
+          try {
+            const statusResponse = await fetch(`/api/contacts/status?job_id=${data.jobId}`);
+            const statusData = await statusResponse.json();
+            
+            if (statusData.success) {
+              console.log('Job status:', statusData.status);
+              
+              // Update job status in localStorage
+              const status = statusData.status.status || 'pending';
+              updatePendingJobStatus(data.jobId, status);
+              setRefreshPendingJobs(prev => prev + 1);
+              
+              // Update message with job status
+              setSubmissionState(prev => ({
+                ...prev,
+                message: `Contact ${duplicateState.isDuplicate ? 'updated' : 'added'} successfully! Status: ${status}`
+              }));
+            }
+          } catch (statusError) {
+            console.error('Error checking job status:', statusError);
+          }
+        }, 2000); // Check after 2 seconds
         
         // Reset form fields for next entry
         resetForm();
         
-        // Clear success message after 3 seconds
+        // Clear success message after 5 seconds (longer to show status)
         setTimeout(() => {
           setSubmissionState(prev => ({
             ...prev,
             isSuccess: false,
           }));
-        }, 3000);
+        }, 5000);
       } else {
         throw new Error(data.error || 'Something went wrong');
       }
@@ -562,6 +661,127 @@ export function ContactForm() {
           </p>
         </div>
       )}
+      
+      {/* Key based on refreshPendingJobs to trigger re-render when needed */}
+      <PendingJobsList 
+        key={refreshPendingJobs} 
+        onRefresh={() => setRefreshPendingJobs(prev => prev + 1)} 
+      />
     </Card>
+  );
+}
+
+function PendingJobsList({ onRefresh }: { onRefresh: () => void }) {
+  const [jobs, setJobs] = useState<PendingJob[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  useEffect(() => {
+    setJobs(getPendingJobs());
+  }, []);
+  
+  const checkJobStatus = async (jobId: string) => {
+    setIsLoading(true);
+    
+    try {
+      const response = await fetch(`/api/contacts/status?job_id=${jobId}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        console.log('Job status:', data.status);
+        const status = data.status.status || 'pending';
+        
+        // Update job with status and any error information
+        const updatedJobs = getPendingJobs().map(job => 
+          job.jobId === jobId 
+            ? { 
+                ...job, 
+                status, 
+                errorInfo: data.errorInfo 
+              } 
+            : job
+        );
+        
+        savePendingJobs(updatedJobs);
+        setJobs(updatedJobs);
+      }
+    } catch (error) {
+      console.error('Error checking job status:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const checkAllJobStatuses = async () => {
+    setIsLoading(true);
+    
+    const pendingJobs = jobs.filter(job => !job.status || job.status === 'pending');
+    
+    for (const job of pendingJobs) {
+      await checkJobStatus(job.jobId);
+      // Small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    
+    onRefresh();
+    setIsLoading(false);
+  };
+  
+  // Only show if there are pending jobs (no status or status is pending)
+  const pendingJobsExist = jobs.some(job => !job.status || job.status === 'pending');
+  
+  if (!pendingJobsExist) return null;
+  
+  return (
+    <div className="mt-6 pt-4 border-t border-gray-100">
+      <div className="flex justify-between items-center mb-2">
+        <h3 className="text-sm font-medium">Pending Contact Submissions</h3>
+        <Button 
+          size="sm" 
+          variant="outline" 
+          onClick={checkAllJobStatuses}
+          disabled={isLoading}
+          className="text-xs h-7 px-2"
+        >
+          {isLoading ? 'Checking...' : 'Check All Statuses'}
+        </Button>
+      </div>
+      
+      <div className="space-y-2 max-h-[200px] overflow-y-auto">
+        {jobs.filter(job => !job.status || job.status === 'pending').map(job => (
+          <div 
+            key={job.jobId} 
+            className={`border rounded-md p-2 text-xs flex justify-between items-center ${
+              job.errorInfo ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'
+            }`}
+          >
+            <div>
+              <div className="font-medium">{job.name || 'Contact'}</div>
+              <div className="text-muted-foreground">{job.email}</div>
+              <div className={`${job.errorInfo ? 'text-red-600' : 'text-muted-foreground'}`}>
+                Submitted: {new Date(job.createdAt).toLocaleTimeString()} 
+                {job.status ? ` • Status: ${job.status}` : ' • Pending'}
+                {job.errorInfo && job.errorInfo.erroredCount ? 
+                  ` • Errors: ${job.errorInfo.erroredCount}/${job.errorInfo.requestedCount}` 
+                  : ''}
+              </div>
+              {job.errorInfo && job.errorInfo.errorMessage && (
+                <div className="mt-1 text-red-600">
+                  <span className="font-medium">Error:</span> {job.errorInfo.errorMessage}
+                </div>
+              )}
+            </div>
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              onClick={() => checkJobStatus(job.jobId)}
+              disabled={isLoading}
+              className="text-xs h-7"
+            >
+              Check
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 } 

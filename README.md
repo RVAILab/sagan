@@ -16,6 +16,8 @@ Sagan is an internal tool designed to help staff quickly add and update contacts
 - **Batch Entry**: Continuous entry mode for adding multiple contacts in succession
 - **Keyboard Optimized**: Full keyboard navigation support for rapid data entry
 - **Mobile Friendly**: Responsive design works on all devices
+- **Contacts Management**: Browse, search, sort, and filter your contacts list with customizable columns
+- **Bulk Operations**: Select multiple contacts for batch operations
 
 ## Technology Stack
 
@@ -58,13 +60,34 @@ Sagan is an internal tool designed to help staff quickly add and update contacts
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-## SendGrid Integration
+## SendGrid API Integration
 
 Sagan integrates with the SendGrid Marketing Campaigns API to manage your contacts:
 
 - **Contact Addition**: Adds new contacts to your SendGrid marketing database
 - **Contact Updates**: Updates existing contacts when duplicates are detected
+- **Contact Search**: Checks if an email already exists in your database
 - **Custom Fields**: Supports SendGrid custom fields (particularly for tags)
+- **Contact Export**: Retrieves all contacts from SendGrid for listing and filtering
+
+### API Endpoints
+
+Sagan uses the following SendGrid API endpoints:
+
+- `PUT /v3/marketing/contacts` - Add or update contacts
+- `POST /v3/marketing/contacts/search/emails` - Check if an email exists
+- `POST /v3/marketing/contacts/exports` - Export contacts for listing
+- `GET /v3/marketing/contacts/exports/{id}` - Get status of an export job
+
+The contacts listing feature uses the export endpoint to retrieve contacts, as the search endpoint is limited to 50 results. The data is processed on the client side for filtering and sorting to provide a fast, responsive experience.
+
+### Data Processing
+
+The application handles the following data formats from SendGrid:
+
+- NDJSON (Newline Delimited JSON) for contact exports
+- Gzipped content for efficient data transfer
+- Standard JSON for API responses
 
 ### Setting Up Your SendGrid Account
 
@@ -72,6 +95,26 @@ Sagan integrates with the SendGrid Marketing Campaigns API to manage your contac
 2. Generate an API key with Marketing Campaigns permissions
 3. Add the API key to your `.env.local` file
 4. Configure custom fields in SendGrid if you want to use the tagging feature
+
+## Contacts Management
+
+The contacts page provides a comprehensive interface for managing your contacts:
+
+### Viewing Contacts
+
+- **Sort columns**: Click on column headers to sort by that field
+- **Customize columns**: Choose which fields to display in the table
+- **Responsive design**: Works on both desktop and mobile devices
+
+### Filtering and Searching
+
+- **Quick search**: Filter contacts by any field using the search box
+- **In-memory filtering**: Instant results without waiting for API calls
+
+### Selection and Bulk Actions
+
+- **Multi-select**: Choose multiple contacts using checkboxes
+- **Batch operations**: Perform actions on multiple contacts at once
 
 ## Usage Guide
 
@@ -95,13 +138,13 @@ Sagan integrates with the SendGrid Marketing Campaigns API to manage your contac
 2. Enter phone number, city, state, postal code, and/or country
 3. Click "- Hide address fields" to collapse the section
 
-### Handling Duplicates
+### Managing Contacts
 
-When an email already exists in your database:
-1. The email field will be highlighted in amber
-2. A warning message will appear showing the existing contact's details
-3. Continue submitting to update the existing contact
-4. A confirmation dialog will appear to confirm the update
+1. Navigate to the Contacts page from the main navigation
+2. Use the search box to filter contacts by any field
+3. Click column headers to sort by that field
+4. Use the Columns button to customize which fields are displayed
+5. Check boxes next to contacts to select them for batch operations
 
 ## Deployment
 
