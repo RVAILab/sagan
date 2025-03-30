@@ -1,235 +1,124 @@
-# RVAI Lab Vibe Coding Starter Kit
+# Sagan
 
-A modern web application starter kit created by [Rogue Valley AI Lab](https://rvai.io) and [WhiteRabbit Ashland](https://whiterabbit.ai), optimized for development in [Cursor](https://cursor.sh) and deployment on [Vercel](https://vercel.com).
+A streamlined contact management tool for efficient SendGrid contact entry, named after Carl Sagan's novel "Contact".
+
+![Sagan Contact Management](./public/sagan-screenshot.png)
 
 ## Overview
 
-This starter kit provides a complete foundation for building vibe coded applications with web technologies that play well with Vercel–a serverless platform that makes it easy to deploy publicly:
+Sagan is an internal tool designed to help staff quickly add and update contacts in your SendGrid marketing database. Built with a focus on efficiency and user experience, it streamlines the process of collecting and managing contact information.
 
-- **Framework**: [Next.js](https://nextjs.org) with App Router
+## Features
+
+- **Quick Contact Entry**: Add new contacts with just a name and email
+- **Duplicate Detection**: Automatically checks if an email already exists in your database
+- **Tagging System**: Categorize contacts with quick-add source tags (meetup, partner, etc.)
+- **Optional Fields**: Expand the form to add additional details when needed (phone, address)
+- **Batch Entry**: Continuous entry mode for adding multiple contacts in succession
+- **Keyboard Optimized**: Full keyboard navigation support for rapid data entry
+- **Mobile Friendly**: Responsive design works on all devices
+
+## Technology Stack
+
+- **Framework**: Next.js with App Router
 - **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **UI Components**: Shadcn UI
-- **Authentication**: Clerk
-- **Database**: Neon PostgreSQL
-- **ORM**: Drizzle
+- **Styling**: Tailwind CSS with Shadcn UI components
+- **Authentication**: Clerk (optional)
+- **Database Integration**: SendGrid Marketing Campaigns API
 
 ## Getting Started
-There's a lot of details here, but the goal is primarily to give your AI agent the context to take these actions on your behalf. Make sure your cursor agent reads this file when first kickstarting your work. It'll make its work a lot more reliable! 
-
-Note the AI: don't setup anything here until it's actually needed. For instance, don't bother with setting up a database until it's required to build out a feature. Always be conservative with adding complexity!
-
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) (version 18 or higher)
-- [npm](https://www.npmjs.com/) (comes with Node.js)
-- Git (for cloning the repository)
+- Node.js (version 18 or higher)
+- SendGrid account with API access
+- npm or yarn
 
-### Installation and Setup
+### Installation
 
-1. Clone the repository to your local machine:
+1. Clone the repository:
    ```bash
-   git clone https://github.com/RVAILab/webapp-starter-kit
-   cd webapp-starter-kit
+   git clone https://github.com/yourusername/sagan.git
+   cd sagan
    ```
 
-2. Install the dependencies:
+2. Install dependencies:
    ```bash
    npm install
    ```
 
-3. Create a `.env.local` file based on the `.env.example` file:
-   ```bash
-   cp .env.example .env
+3. Create a `.env.local` file with your SendGrid API key:
+   ```
+   SENDGRID_API_KEY=your_sendgrid_api_key_here
    ```
 
-4. Update the `.env.local` file with your own API keys and configuration values.
-
-5. Run the development server:
+4. Start the development server:
    ```bash
    npm run dev
    ```
 
-6. Open [http://localhost:3000](http://localhost:3000) with your browser to see the result (just a basic NextJS page).
+5. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-Now you can ask Cursor to build new functionality with the specifics of this tech stack.
+## SendGrid Integration
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a custom font from Vercel.
+Sagan integrates with the SendGrid Marketing Campaigns API to manage your contacts:
 
-## Database Setup
+- **Contact Addition**: Adds new contacts to your SendGrid marketing database
+- **Contact Updates**: Updates existing contacts when duplicates are detected
+- **Custom Fields**: Supports SendGrid custom fields (particularly for tags)
 
-This project uses [Neon](https://neon.tech) for PostgreSQL database and [Drizzle ORM](https://orm.drizzle.team) for database access.
-
-### Setup Steps
-
-1. Create a Neon account and project at [neon.tech](https://neon.tech)
-2. Get your database connection string from the Neon dashboard
-3. update the `DATABASE_URL` with your connection string
-4. Generate database migrations:
-   ```bash
-   npm run db:generate
-   ```
-5. Apply migrations to your database:
-   ```bash
-   npm run db:migrate
-   ```
-
-### Database Scripts
-
-- `npm run db:generate` - Generate SQL migrations based on your schema changes
-- `npm run db:push` - Push schema changes directly to the database (use in development only)
-- `npm run db:migrate` - Apply migrations to your database
-
-## UI Components with Shadcn UI
-
-This project uses [Shadcn UI](https://ui.shadcn.com/), a collection of reusable components built with Radix UI and Tailwind CSS.
-
-### Key Features
-
-- Beautifully designed components
-- Built with Radix UI primitives
-- Styled with Tailwind CSS
-- Fully accessible and customizable
-- Automatic dark mode support
-
-### Usage
-
-Import components from the `@/components/ui` directory:
-
-```tsx
-import { Button } from "@/components/ui/button";
-
-export default function Home() {
-  return (
-    <Button variant="outline">Click me</Button>
-  );
-}
-```
-
-For more information and documentation, visit [Shadcn UI documentation](https://ui.shadcn.com/docs).
-
-## Authentication with Clerk
-
-This project uses [Clerk](https://clerk.com/) for user authentication and identity management. A basic implementation of login/logout and profile menu is added to the layout file. You'll likely want to customize this furhter.
-
-### Features
-
-- Complete authentication system
-- User management
-- Multi-session support
-- OAuth providers
-- Email/password authentication
-- Security and compliance out of the box
-
-### Environment Setup
-
-To use Clerk, you need to set up environment variables within your .env.local file (and later on Vercel, if you want to deploy this app to the cloud):
-
-1. Create a Clerk account at [clerk.com](https://clerk.com/)
-2. Create a new application in the Clerk dashboard
-3. Copy your API keys from the Clerk dashboard
-4. Add the required environment variables to your `.env.local` file:
-
-For more information, visit [Clerk documentation](https://clerk.com/docs).
-
-## Email Marketing with SendGrid
-
-This project includes integration with the [SendGrid Marketing Campaigns API](https://docs.sendgrid.com/api-reference/contacts) to manage newsletter subscriptions and marketing contacts.
-
-### Features
-
-- Contact form for newsletter subscription
-- Integration with SendGrid Marketing Campaigns
-- Automatic contact management in your SendGrid account
-
-### Environment Setup
-
-To use SendGrid, you need to set up environment variables:
+### Setting Up Your SendGrid Account
 
 1. Create a SendGrid account at [sendgrid.com](https://sendgrid.com/)
-2. Create an API key with Marketing Campaigns access permissions in the SendGrid dashboard
-3. Add the API key to your `.env.local` file:
+2. Generate an API key with Marketing Campaigns permissions
+3. Add the API key to your `.env.local` file
+4. Configure custom fields in SendGrid if you want to use the tagging feature
 
-```
-SENDGRID_API_KEY=your_sendgrid_api_key_here
-```
+## Usage Guide
 
-### Implementation Details
+### Adding Contacts
 
-- The contact form is located at `src/components/ContactForm.tsx`
-- The API route that handles form submissions is at `src/app/api/contacts/route.ts`
-- The integration uses the `@sendgrid/client` library to communicate with the SendGrid API
+1. Enter the contact's first name and email (required fields)
+2. Add last name if available (optional)
+3. Add source tags to track how the contact heard about you
+4. Click "Add Contact" to submit
 
-For more information, visit [SendGrid API documentation](https://docs.sendgrid.com/api-reference/contacts).
+### Using Tags
 
-## Development Environment
+1. Use the quick-add buttons for common sources (meetup, partner, etc.)
+2. Type custom tags in the input field
+3. Press Enter or click "Add" to add the custom tag
+4. Click the "×" on a tag to remove it
 
-This starter kit is optimized for development in [Cursor](https://cursor.sh), an AI-powered code editor that enhances productivity with:
+### Adding Additional Information
 
-- AI code completion
-- Intelligent code navigation
-- Integrated AI assistance
-- TypeScript support
-- Git integration
+1. Click "+ Add address fields" to show additional fields
+2. Enter phone number, city, state, postal code, and/or country
+3. Click "- Hide address fields" to collapse the section
 
-## Cursor Rules for AI-Assisted Development
+### Handling Duplicates
 
-This starter kit includes special-purpose rules in the `.cursor` directory that enhance AI-assisted development. These rules provide context-aware guidance to Cursor AI when working with specific aspects of the codebase.
-
-### Project-Wide Rules
-
-The `.cursorrules` file at the root of this project provides global guidance to the cursor agent for the entire codebase, including:
-
-- **Technical Standards**: Guidelines for TypeScript usage, Next.js best practices, and mobile-first design
-- **Development Approach**: Standardized pacing, scope control, and communication protocols
-- **Code Quality**: Enforcement of minimalist implementations and testability-focused development
-
-These global rules ensure consistent coding practices throughout the project and define a structured workflow for AI-assisted development.
-
-### Domain-Specific Rules
-
-In addition to the global rules, specific domain rules are available in the `.cursor/rules/` directory:
-
-- **Database Handling**: Guidelines for working with PostgreSQL and Drizzle ORM, including schema configuration, migrations, and best practices.
-- **Dynamic Page Routes**: Instructions for implementing Next.js dynamic routes without type issues, with code examples and proper TypeScript typing.
-- **User Interface**: Guidelines for working with Shadcn UI components, including installation commands and best practices.
-
-### How Cursor Rules Work
-
-1. Rules are stored in `.cursor/rules/` as markdown files with YAML frontmatter.
-2. Each rule has a description that Cursor AI uses to understand when to apply it.
-3. When you're working on a relevant part of the codebase, Cursor AI can fetch these rules to provide context-specific guidance.
-4. You can request specific rules using the `fetch_rules` command within Cursor.
-
-### Benefits
-
-- Ensures consistent implementation of patterns across the codebase
-- Provides project-specific best practices at your fingertips
-- Reduces the need to remember complex implementation details
-- Helps new team members get up to speed quickly
+When an email already exists in your database:
+1. The email field will be highlighted in amber
+2. A warning message will appear showing the existing contact's details
+3. Continue submitting to update the existing contact
+4. A confirmation dialog will appear to confirm the update
 
 ## Deployment
 
-This starter kit is designed for seamless deployment on [Vercel](https://vercel.com), the platform from the creators of Next.js.
+Sagan can be deployed to Vercel or any other Next.js-compatible hosting service.
 
-To deploy your application:
+To deploy to Vercel:
 
-1. Push your code to a GitHub repository
-2. Import your repository to Vercel
-3. Configure your environment variables
+1. Push your code to a Git repository
+2. Import the project to Vercel
+3. Add your environment variables (SENDGRID_API_KEY)
 4. Deploy
 
-## About
+## Contributing
 
-This starter kit is maintained by [Rogue Valley AI Lab](https://rvai.io) and [WhiteRabbit Ashland](https://whiterabbit.ai), organizations dedicated to advancing AI and web development technologies.
+Contributions are welcome! Please feel free to submit a pull request.
 
-## Learn More
+## License
 
-To learn more about the technologies used in this starter kit:
-
-- [Next.js Documentation](https://nextjs.org/docs)
-- [Clerk Documentation](https://clerk.com/docs)
-- [Shadcn UI Documentation](https://ui.shadcn.com/docs)
-- [Neon Documentation](https://neon.tech/docs)
-- [Drizzle ORM Documentation](https://orm.drizzle.team/docs)
+This project is licensed under the MIT License - see the LICENSE file for details.
