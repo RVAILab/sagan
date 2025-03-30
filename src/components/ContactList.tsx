@@ -17,7 +17,7 @@ import {
   TableRow,
   Button
 } from "@/components/ui";
-import { Search } from 'lucide-react';
+import { Search, MoreVertical } from 'lucide-react';
 
 interface Contact {
   email: string;
@@ -73,6 +73,16 @@ const ContactList = () => {
   const [visibleColumns, setVisibleColumns] = useState<Set<keyof Contact>>(
     new Set(["email", "first_name", "last_name", "tags"])
   );
+  // Add state for selected contacts and tag management
+  const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
+  const [tagInput, setTagInput] = useState('');
+  const [isUpdatingTags, setIsUpdatingTags] = useState(false);
+  const [tagModalOpen, setTagModalOpen] = useState(false);
+  const [tagOperation, setTagOperation] = useState<'add'|'remove'|'replace'>('add');
+  const [oldTagValue, setOldTagValue] = useState('');
+  const [newTagValue, setNewTagValue] = useState('');
+  const [tagActionError, setTagActionError] = useState('');
+  const [tagActionSuccess, setTagActionSuccess] = useState('');
 
   // Toggle column visibility
   const toggleColumn = (column: keyof Contact) => {
@@ -288,6 +298,233 @@ const ContactList = () => {
     return undefined;
   };
 
+  // Add selection handling functions
+  const toggleContactSelection = (email: string) => {
+    const newSelection = new Set(selectedContacts);
+    if (newSelection.has(email)) {
+      newSelection.delete(email);
+    } else {
+      newSelection.add(email);
+    }
+    setSelectedContacts(newSelection);
+  };
+
+  const toggleAllSelection = () => {
+    if (selectedContacts.size === filteredContacts.length) {
+      // Deselect all
+      setSelectedContacts(new Set());
+    } else {
+      // Select all filtered contacts
+      const allEmails = filteredContacts.map(contact => contact.email);
+      setSelectedContacts(new Set(allEmails));
+    }
+  };
+
+  const isContactSelected = (email: string) => {
+    return selectedContacts.has(email);
+  };
+
+  const clearSelection = () => {
+    setSelectedContacts(new Set());
+  };
+
+  // Reset selection when contacts or filters change
+  useEffect(() => {
+    clearSelection();
+  }, [contacts, searchTerm]);
+
+  // Tag management functions
+  const addTagToContact = async (email: string, tag: string) => {
+    setIsUpdatingTags(true);
+    setTagActionError('');
+    setTagActionSuccess('');
+    
+    try {
+      // Get the existing contact
+      const contact = contacts.find(c => c.email === email);
+      if (!contact) {
+        throw new Error(`Contact with email ${email} not found`);
+      }
+      
+      // Get existing tags
+      let existingTags: string[] = [];
+      if (contact.tags_array) {
+        existingTags = [...contact.tags_array];
+      } else if (typeof contact.tags === 'string') {
+        existingTags = contact.tags.split(',').map(t => t.trim()).filter(Boolean);
+      }
+      
+      // Check if tag already exists
+      if (existingTags.includes(tag)) {
+        setTagActionSuccess(`Tag "${tag}" already exists for this contact`);
+        setIsUpdatingTags(false);
+        return;
+      }
+      
+      // Add the new tag
+      const newTags = [...existingTags, tag];
+      
+      // Update the contact
+      const response = await fetch('/api/contacts/update-tags', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          emails: [email],
+          tags: newTags.join(', ')
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update local contact data
+        const updatedContacts = contacts.map(c => {
+          if (c.email === email) {
+            return {
+              ...c,
+              tags: newTags.join(', '),
+              tags_array: newTags
+            };
+          }
+          return c;
+        });
+        
+        setContacts(updatedContacts);
+        applyFiltersAndSort(updatedContacts, searchTerm, sortField, sortDirection);
+        setTagActionSuccess(`Added tag "${tag}" to contact`);
+        
+        // Update localStorage cache
+        localStorage.setItem('sagan_contacts', JSON.stringify(updatedContacts));
+      } else {
+        throw new Error(data.error || 'Failed to update tags');
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred updating tags';
+      setTagActionError(errorMessage);
+      console.error('Error adding tag:', error);
+    } finally {
+      setIsUpdatingTags(false);
+    }
+  };
+
+  const executeTagAction = async () => {
+    if (selectedContacts.size === 0) {
+      setTagActionError('No contacts selected');
+      return;
+    }
+    
+    setIsUpdatingTags(true);
+    setTagActionError('');
+    setTagActionSuccess('');
+    
+    try {
+      const selectedEmails = Array.from(selectedContacts);
+      let updatedTags: Record<string, string[]> = {};
+      
+      // Build updated tags for each contact based on operation
+      for (const email of selectedEmails) {
+        const contact = contacts.find(c => c.email === email);
+        if (!contact) continue;
+        
+        // Get existing tags
+        let existingTags: string[] = [];
+        if (contact.tags_array) {
+          existingTags = [...contact.tags_array];
+        } else if (typeof contact.tags === 'string') {
+          existingTags = contact.tags.split(',').map(t => t.trim()).filter(Boolean);
+        }
+        
+        let newTags: string[] = [];
+        
+        switch (tagOperation) {
+          case 'add':
+            if (!existingTags.includes(newTagValue)) {
+              newTags = [...existingTags, newTagValue];
+            } else {
+              newTags = existingTags; // No change needed
+            }
+            break;
+            
+          case 'remove':
+            newTags = existingTags.filter(tag => tag !== oldTagValue);
+            break;
+            
+          case 'replace':
+            newTags = existingTags.map(tag => 
+              tag === oldTagValue ? newTagValue : tag
+            );
+            break;
+        }
+        
+        updatedTags[email] = newTags;
+      }
+      
+      // Perform the update
+      const response = await fetch('/api/contacts/bulk-update-tags', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          updates: Object.entries(updatedTags).map(([email, tags]) => ({
+            email,
+            tags: tags.join(', ')
+          }))
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Update local contact data
+        const updatedContacts = contacts.map(c => {
+          if (selectedContacts.has(c.email) && updatedTags[c.email]) {
+            return {
+              ...c,
+              tags: updatedTags[c.email].join(', '),
+              tags_array: updatedTags[c.email]
+            };
+          }
+          return c;
+        });
+        
+        setContacts(updatedContacts);
+        applyFiltersAndSort(updatedContacts, searchTerm, sortField, sortDirection);
+        
+        // Update localStorage cache
+        localStorage.setItem('sagan_contacts', JSON.stringify(updatedContacts));
+        
+        // Set success message based on operation
+        let successMessage = '';
+        switch (tagOperation) {
+          case 'add':
+            successMessage = `Added tag "${newTagValue}" to ${selectedContacts.size} contact(s)`;
+            break;
+          case 'remove':
+            successMessage = `Removed tag "${oldTagValue}" from ${selectedContacts.size} contact(s)`;
+            break;
+          case 'replace':
+            successMessage = `Replaced tag "${oldTagValue}" with "${newTagValue}" for ${selectedContacts.size} contact(s)`;
+            break;
+        }
+        
+        setTagActionSuccess(successMessage);
+        setTagModalOpen(false);
+        
+      } else {
+        throw new Error(data.error || 'Failed to update tags');
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred updating tags';
+      setTagActionError(errorMessage);
+      console.error('Error updating tags:', error);
+    } finally {
+      setIsUpdatingTags(false);
+    }
+  };
+
   return (
     <div className="container mx-auto py-4">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-4">
@@ -349,6 +586,148 @@ const ContactList = () => {
         </div>
       </div>
 
+      {/* Tag Actions UI - Only show when contacts are selected */}
+      {selectedContacts.size > 0 && (
+        <div className="mb-4 bg-gray-50 rounded-md p-3 border border-gray-200">
+          <div className="flex flex-col sm:flex-row justify-between gap-2 items-start sm:items-center mb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">{selectedContacts.size} contact{selectedContacts.size !== 1 ? 's' : ''} selected</span>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={clearSelection}
+                className="text-xs h-7 px-2"
+              >
+                Clear
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8">
+                    Tag Actions
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>Manage Tags</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuCheckboxItem
+                    onClick={() => {
+                      setTagOperation('add');
+                      setNewTagValue('');
+                      setTagModalOpen(true);
+                    }}
+                  >
+                    Add tag to selected
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    onClick={() => {
+                      setTagOperation('remove');
+                      setOldTagValue('');
+                      setTagModalOpen(true);
+                    }}
+                  >
+                    Remove tag from selected
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    onClick={() => {
+                      setTagOperation('replace');
+                      setOldTagValue('');
+                      setNewTagValue('');
+                      setTagModalOpen(true);
+                    }}
+                  >
+                    Replace tag in selected
+                  </DropdownMenuCheckboxItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+
+          {tagActionSuccess && (
+            <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded-md text-sm mb-2">
+              {tagActionSuccess}
+            </div>
+          )}
+          
+          {tagActionError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-md text-sm mb-2">
+              {tagActionError}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tag Action Modal */}
+      {tagModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium mb-4">
+              {tagOperation === 'add' && 'Add Tag'}
+              {tagOperation === 'remove' && 'Remove Tag'}
+              {tagOperation === 'replace' && 'Replace Tag'}
+            </h3>
+            
+            {tagOperation === 'add' && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1">Tag to add:</label>
+                <Input
+                  value={newTagValue}
+                  onChange={(e) => setNewTagValue(e.target.value)}
+                  placeholder="Enter tag name"
+                  className="w-full"
+                />
+              </div>
+            )}
+            
+            {(tagOperation === 'remove' || tagOperation === 'replace') && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1">Tag to {tagOperation === 'remove' ? 'remove' : 'replace'}:</label>
+                <Input
+                  value={oldTagValue}
+                  onChange={(e) => setOldTagValue(e.target.value)}
+                  placeholder="Enter existing tag name"
+                  className="w-full"
+                />
+              </div>
+            )}
+            
+            {tagOperation === 'replace' && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-1">New tag:</label>
+                <Input
+                  value={newTagValue}
+                  onChange={(e) => setNewTagValue(e.target.value)}
+                  placeholder="Enter new tag name"
+                  className="w-full"
+                />
+              </div>
+            )}
+            
+            <div className="flex justify-end gap-2 mt-6">
+              <Button
+                variant="outline"
+                onClick={() => setTagModalOpen(false)}
+                disabled={isUpdatingTags}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={executeTagAction}
+                disabled={
+                  isUpdatingTags || 
+                  (tagOperation === 'add' && !newTagValue) ||
+                  (tagOperation === 'remove' && !oldTagValue) ||
+                  (tagOperation === 'replace' && (!oldTagValue || !newTagValue))
+                }
+              >
+                {isUpdatingTags ? 'Processing...' : 'Confirm'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center p-8">
           <div className="animate-spin h-8 w-8 border-4 border-gray-300 rounded-full border-t-blue-600"></div>
@@ -358,6 +737,14 @@ const ContactList = () => {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">
+                  <input
+                    type="checkbox"
+                    checked={filteredContacts.length > 0 && selectedContacts.size === filteredContacts.length}
+                    onChange={toggleAllSelection}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                </TableHead>
                 {STANDARD_COLUMNS.filter(col => visibleColumns.has(col.key)).map(column => (
                   <TableHead
                     key={column.key}
@@ -367,12 +754,21 @@ const ContactList = () => {
                     {column.label} {sortField === column.key && (sortDirection === "asc" ? "↑" : "↓")}
                   </TableHead>
                 ))}
+                <TableHead className="w-16">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredContacts.length > 0 ? (
                 filteredContacts.map((contact, index) => (
-                  <TableRow key={index}>
+                  <TableRow key={index} className={isContactSelected(contact.email) ? "bg-blue-50" : ""}>
+                    <TableCell className="w-12">
+                      <input
+                        type="checkbox"
+                        checked={isContactSelected(contact.email)}
+                        onChange={() => toggleContactSelection(contact.email)}
+                        className="h-4 w-4 rounded border-gray-300"
+                      />
+                    </TableCell>
                     {STANDARD_COLUMNS.filter(col => visibleColumns.has(col.key)).map(column => (
                       <TableCell key={column.key}>
                         {column.key === "tags" ? (
@@ -398,7 +794,7 @@ const ContactList = () => {
                               <span>-</span>
                             )}
                           </div>
-                        ) : (
+                        ) :
                           // Use our helper function for all other values
                           (() => {
                             const value = getContactValue(contact, column.key as string);
@@ -407,14 +803,41 @@ const ContactList = () => {
                             }
                             return value || "-";
                           })()
-                        )}
+                        }
                       </TableCell>
                     ))}
+                    <TableCell className="w-16">
+                      <div className="flex items-center justify-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <span className="sr-only">Open menu</span>
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuCheckboxItem 
+                              onClick={() => {
+                                setTagInput('');
+                                const addTagPrompt = prompt('Enter a tag to add to this contact:');
+                                if (addTagPrompt) {
+                                  addTagToContact(contact.email, addTagPrompt.trim());
+                                }
+                              }}
+                            >
+                              Add tag
+                            </DropdownMenuCheckboxItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={visibleColumns.size} className="text-center py-8">
+                  <TableCell colSpan={visibleColumns.size + 2} className="text-center py-8">
                     {searchTerm ? "No contacts found matching your search" : "No contacts found"}
                   </TableCell>
                 </TableRow>

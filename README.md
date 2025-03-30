@@ -90,6 +90,58 @@ The application handles the following data formats from SendGrid:
 - Gzipped content for efficient data transfer
 - Standard JSON for API responses
 
+### SendGrid Contact Data Structure
+
+Below is an example of the expected CSV structure when exporting contacts from SendGrid:
+
+```csv
+email,first_name,last_name,phone_number,address_line_1,city,state_province_region,postal_code,country,tags,region,created_at,updated_at
+user1@example.com,John,Doe,555-1234,123 Main St,New York,NY,10001,US,"tag1,tag2",Northeast,2023-01-15T14:30:00Z,2023-01-15T14:30:00Z
+user2@example.com,Jane,Smith,555-5678,456 Elm St,Boston,MA,02116,US,"tag2,tag3",Northeast,2023-01-16T09:45:00Z,2023-01-16T09:45:00Z
+user3@example.com,Bob,Johnson,555-9012,789 Oak St,Chicago,IL,60601,US,"tag1,tag4",Midwest,2023-01-17T11:15:00Z,2023-01-17T11:15:00Z
+```
+
+#### Standard Fields
+
+The application expects and handles the following standard contact fields:
+
+- `email` - Primary identifier, required
+- `first_name` - First name of the contact
+- `last_name` - Last name of the contact
+- `phone_number` - Contact's phone number
+- `address_line_1` - Street address
+- `city` - City name
+- `state_province_region` - State or province
+- `postal_code` - ZIP or postal code
+- `country` - Country code (e.g., US, CA)
+- `created_at` - When the contact was first added
+- `updated_at` - When the contact was last updated
+
+#### Special Fields
+
+- `tags` - List of tags attached to the contact, formatted as comma-separated values, often enclosed in quotes
+- `region` - Geographic region for categorization
+
+#### Tags Handling
+
+Tags in SendGrid exports can be formatted in different ways:
+
+1. **CSV Format**: `"tag1,tag2,tag3"` (comma-separated values in quotes)
+2. **Double-quoted CSV**: `"""tag1"",""tag2"",""tag3"""` (extra quotes around individual tags)
+3. **Array Format**: As a JSON array in NDJSON exports
+
+The application handles all these formats by:
+- Parsing comma-separated values
+- Removing extraneous quotes
+- Storing both the original string and a parsed array for flexibility
+
+#### Field Case Sensitivity
+
+The application handles variations in field name capitalization by:
+- Converting all field names to lowercase during processing
+- Using case-insensitive lookups when accessing fields
+- Providing fallbacks for known field variations (e.g., checking both `tags` and `TAGS`)
+
 ### Local Storage Caching
 
 The application implements browser localStorage caching for contacts data:
@@ -142,6 +194,37 @@ The contacts page provides a comprehensive interface for managing your contacts:
 - **Manual refresh**: Force refresh contact data from the SendGrid API
 - **Background refresh**: Automatic updates for stale data while browsing
 - **Cache persistence**: Data remains available between browser sessions
+
+### Contact List Display
+
+The `ContactList` component is responsible for displaying contacts in a tabular format with the following features:
+
+#### Column Display and Customization
+
+- **Dynamic Columns**: Users can select which fields to display via the Columns dropdown menu
+- **Default Fields**: Email, First Name, Last Name, and Tags are displayed by default
+- **Toggling Visibility**: Any field can be toggled on/off from the columns menu
+- **Persistence**: Column preferences are saved to localStorage for future sessions
+
+#### Field Rendering
+
+The component handles different field types appropriately:
+
+- **Tags**: Displayed as colorful badges separated by commas
+- **Email**: Displayed as a standard text value with mail-to functionality
+- **Names**: First and last names are displayed as text
+- **Dates**: Formatted for readability
+- **Long Text**: Truncated with ellipsis if too long
+
+#### Case-Insensitive Field Access
+
+The component uses a helper function (`getContactValue`) to access contact fields in a case-insensitive manner:
+
+1. First attempts to access the field with the exact case provided
+2. If not found, tries the uppercase version of the field name
+3. If still not found, performs a case-insensitive search through all field names
+
+This ensures consistent display even when field names have inconsistent casing in the data.
 
 ## Usage Guide
 
