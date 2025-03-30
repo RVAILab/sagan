@@ -1,6 +1,6 @@
 'use client';
 
-import { ChangeEvent, useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useState, useMemo, useCallback, memo } from "react";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -61,11 +61,117 @@ const STANDARD_COLUMNS: Column[] = [
   { key: "added_date", label: "Added Date" }
 ];
 
+// Create a memoized contact row component
+const ContactRowMemo = memo(
+  ({ 
+    contact, 
+    visibleColumns, 
+    isSelected, 
+    onToggleSelection, 
+    onAddTag,
+    getContactValue,
+    columns
+  }: { 
+    contact: Contact; 
+    visibleColumns: Set<keyof Contact>; 
+    isSelected: boolean; 
+    onToggleSelection: (email: string) => void; 
+    onAddTag: (email: string, tag: string) => void;
+    getContactValue: (contact: Contact, key: string) => string | string[] | undefined;
+    columns: Column[];
+  }) => {
+    return (
+      <TableRow className={isSelected ? "bg-blue-50" : ""}>
+        <TableCell className="w-12">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggleSelection(contact.email)}
+            className="h-4 w-4 rounded border-gray-300"
+          />
+        </TableCell>
+        {columns.filter(col => visibleColumns.has(col.key)).map(column => (
+          <TableCell key={column.key}>
+            {column.key === "tags" ? (
+              <div className="flex flex-wrap gap-1">
+                {contact.tags_array ? (
+                  // If tags_array exists, use it (our parsed format)
+                  (contact.tags_array as string[]).map((tag, i) => (
+                    <span key={i} className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs whitespace-nowrap">
+                      {tag}
+                    </span>
+                  ))
+                ) : getContactValue(contact, 'tags') ? (
+                  // Try to get tags with our helper function
+                  (typeof getContactValue(contact, 'tags') === 'string' 
+                    ? (getContactValue(contact, 'tags') as string).split(',') 
+                    : (getContactValue(contact, 'tags') as string[])
+                  ).map((tag: string, i: number) => (
+                    <span key={i} className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs whitespace-nowrap">
+                      {tag.trim()}
+                    </span>
+                  ))
+                ) : (
+                  <span>-</span>
+                )}
+              </div>
+            ) :
+              // Use our helper function for all other values
+              (() => {
+                const value = getContactValue(contact, column.key as string);
+                if (Array.isArray(value)) {
+                  return value.join(', ');
+                }
+                return value || "-";
+              })()
+            }
+          </TableCell>
+        ))}
+        <TableCell className="w-16">
+          <div className="flex items-center justify-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                  <span className="sr-only">Open menu</span>
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem 
+                  onClick={() => {
+                    const addTagPrompt = prompt('Enter a tag to add to this contact:');
+                    if (addTagPrompt) {
+                      onAddTag(contact.email, addTagPrompt.trim());
+                    }
+                  }}
+                >
+                  Add tag
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </TableCell>
+      </TableRow>
+    );
+  },
+  (prevProps, nextProps) => {
+    // Custom comparison function for memo
+    return (
+      prevProps.contact === nextProps.contact &&
+      prevProps.isSelected === nextProps.isSelected &&
+      prevProps.visibleColumns === nextProps.visibleColumns
+    );
+  }
+);
+
 const ContactList = () => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchInputValue, setSearchInputValue] = useState(""); // Track input separately for debouncing
   const [sortField, setSortField] = useState<keyof Contact>("email");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [usingCachedData, setUsingCachedData] = useState(false);
@@ -211,63 +317,64 @@ const ContactList = () => {
     }
   };
 
-  const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setSearchTerm(value);
-    applyFiltersAndSort(contacts, value, sortField, sortDirection);
-  };
+  // Optimize filters and sorting with useMemo
+  const applyFiltersAndSort = useCallback(
+    (
+      data: Contact[],
+      search: string,
+      sortBy: keyof Contact,
+      direction: "asc" | "desc"
+    ) => {
+      let filtered = data;
 
-  const handleSortChange = (field: keyof Contact) => {
-    const newDirection = field === sortField && sortDirection === "asc" ? "desc" : "asc";
-    setSortField(field);
-    setSortDirection(newDirection);
-    applyFiltersAndSort(contacts, searchTerm, field, newDirection);
-  };
-
-  const applyFiltersAndSort = (
-    data: Contact[],
-    search: string,
-    sortBy: keyof Contact,
-    direction: "asc" | "desc"
-  ) => {
-    let filtered = data;
-
-    // Apply search filter
-    if (search) {
-      const lowerSearch = search.toLowerCase();
-      filtered = data.filter((contact) => {
-        return Object.values(contact).some((value) => {
-          if (!value) return false;
-          return value.toString().toLowerCase().includes(lowerSearch);
+      // Apply search filter
+      if (search) {
+        const lowerSearch = search.toLowerCase();
+        filtered = data.filter((contact) => {
+          return Object.values(contact).some((value) => {
+            if (!value) return false;
+            return value.toString().toLowerCase().includes(lowerSearch);
+          });
         });
+      }
+
+      // Apply sorting
+      filtered = [...filtered].sort((a, b) => {
+        const aValue = a[sortBy];
+        const bValue = b[sortBy];
+
+        // Special handling for arrays
+        if (Array.isArray(aValue) || Array.isArray(bValue)) {
+          const aString = Array.isArray(aValue) ? aValue.join(', ') : (aValue || "");
+          const bString = Array.isArray(bValue) ? bValue.join(', ') : (bValue || "");
+          return direction === "asc" ? aString.localeCompare(bString) : bString.localeCompare(aString);
+        }
+
+        // Regular string comparison
+        const aString = aValue?.toString() || "";
+        const bString = bValue?.toString() || "";
+        
+        if (direction === "asc") {
+          return aString.localeCompare(bString);
+        } else {
+          return bString.localeCompare(aString);
+        }
       });
-    }
 
-    // Apply sorting
-    filtered = [...filtered].sort((a, b) => {
-      const aValue = a[sortBy];
-      const bValue = b[sortBy];
+      return filtered;
+    },
+    []
+  );
 
-      // Special handling for arrays
-      if (Array.isArray(aValue) || Array.isArray(bValue)) {
-        const aString = Array.isArray(aValue) ? aValue.join(', ') : (aValue || "");
-        const bString = Array.isArray(bValue) ? bValue.join(', ') : (bValue || "");
-        return direction === "asc" ? aString.localeCompare(bString) : bString.localeCompare(aString);
-      }
+  // Memoize filtered contacts
+  const memoizedFilteredContacts = useMemo(() => {
+    return applyFiltersAndSort(contacts, searchTerm, sortField, sortDirection);
+  }, [contacts, searchTerm, sortField, sortDirection, applyFiltersAndSort]);
 
-      // Regular string comparison
-      const aString = aValue?.toString() || "";
-      const bString = bValue?.toString() || "";
-      
-      if (direction === "asc") {
-        return aString.localeCompare(bString);
-      } else {
-        return bString.localeCompare(aString);
-      }
-    });
-
-    setFilteredContacts(filtered);
-  };
+  // Update filtered contacts on dependency changes
+  useEffect(() => {
+    setFilteredContacts(memoizedFilteredContacts);
+  }, [memoizedFilteredContacts]);
 
   // Fetch contacts and custom fields on component mount
   useEffect(() => {
@@ -298,18 +405,48 @@ const ContactList = () => {
     return undefined;
   };
 
-  // Add selection handling functions
-  const toggleContactSelection = (email: string) => {
-    const newSelection = new Set(selectedContacts);
-    if (newSelection.has(email)) {
-      newSelection.delete(email);
-    } else {
-      newSelection.add(email);
-    }
-    setSelectedContacts(newSelection);
-  };
+  // Memoize the "select all" checked state
+  const allSelected = useMemo(() => {
+    return filteredContacts.length > 0 && selectedContacts.size === filteredContacts.length;
+  }, [filteredContacts.length, selectedContacts.size]);
 
-  const toggleAllSelection = () => {
+  // Optimize handleSearchChange to debounce input
+  const handleSearchChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchInputValue(value);
+  }, []);
+
+  // Use debounce for search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchTerm(searchInputValue);
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timer);
+  }, [searchInputValue]);
+
+  const handleSortChange = useCallback((field: keyof Contact) => {
+    const newDirection = field === sortField && sortDirection === "asc" ? "desc" : "asc";
+    setSortField(field);
+    setSortDirection(newDirection);
+    // We don't need to call applyFiltersAndSort here as it will trigger via the useEffect
+  }, [sortField, sortDirection]);
+
+  // Toggle contact selection with useCallback
+  const toggleContactSelection = useCallback((email: string) => {
+    setSelectedContacts(prev => {
+      const newSelection = new Set(prev);
+      if (newSelection.has(email)) {
+        newSelection.delete(email);
+      } else {
+        newSelection.add(email);
+      }
+      return newSelection;
+    });
+  }, []);
+
+  // Toggle all selection with useCallback
+  const toggleAllSelection = useCallback(() => {
     if (selectedContacts.size === filteredContacts.length) {
       // Deselect all
       setSelectedContacts(new Set());
@@ -318,15 +455,15 @@ const ContactList = () => {
       const allEmails = filteredContacts.map(contact => contact.email);
       setSelectedContacts(new Set(allEmails));
     }
-  };
+  }, [filteredContacts, selectedContacts.size]);
 
-  const isContactSelected = (email: string) => {
+  const isContactSelected = useCallback((email: string) => {
     return selectedContacts.has(email);
-  };
+  }, [selectedContacts]);
 
-  const clearSelection = () => {
+  const clearSelection = useCallback(() => {
     setSelectedContacts(new Set());
-  };
+  }, []);
 
   // Reset selection when contacts or filters change
   useEffect(() => {
@@ -546,7 +683,7 @@ const ContactList = () => {
             <Input
               type="text"
               placeholder="Search contacts..."
-              value={searchTerm}
+              value={searchInputValue}
               onChange={handleSearchChange}
               className="pl-8 w-full"
             />
@@ -740,7 +877,7 @@ const ContactList = () => {
                 <TableHead className="w-12">
                   <input
                     type="checkbox"
-                    checked={filteredContacts.length > 0 && selectedContacts.size === filteredContacts.length}
+                    checked={allSelected}
                     onChange={toggleAllSelection}
                     className="h-4 w-4 rounded border-gray-300"
                   />
@@ -759,81 +896,17 @@ const ContactList = () => {
             </TableHeader>
             <TableBody>
               {filteredContacts.length > 0 ? (
-                filteredContacts.map((contact, index) => (
-                  <TableRow key={index} className={isContactSelected(contact.email) ? "bg-blue-50" : ""}>
-                    <TableCell className="w-12">
-                      <input
-                        type="checkbox"
-                        checked={isContactSelected(contact.email)}
-                        onChange={() => toggleContactSelection(contact.email)}
-                        className="h-4 w-4 rounded border-gray-300"
-                      />
-                    </TableCell>
-                    {STANDARD_COLUMNS.filter(col => visibleColumns.has(col.key)).map(column => (
-                      <TableCell key={column.key}>
-                        {column.key === "tags" ? (
-                          <div className="flex flex-wrap gap-1">
-                            {contact.tags_array ? (
-                              // If tags_array exists, use it (our parsed format)
-                              (contact.tags_array as string[]).map((tag, i) => (
-                                <span key={i} className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs whitespace-nowrap">
-                                  {tag}
-                                </span>
-                              ))
-                            ) : getContactValue(contact, 'tags') ? (
-                              // Try to get tags with our helper function
-                              (typeof getContactValue(contact, 'tags') === 'string' 
-                                ? (getContactValue(contact, 'tags') as string).split(',') 
-                                : (getContactValue(contact, 'tags') as string[])
-                              ).map((tag: string, i: number) => (
-                                <span key={i} className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs whitespace-nowrap">
-                                  {tag.trim()}
-                                </span>
-                              ))
-                            ) : (
-                              <span>-</span>
-                            )}
-                          </div>
-                        ) :
-                          // Use our helper function for all other values
-                          (() => {
-                            const value = getContactValue(contact, column.key as string);
-                            if (Array.isArray(value)) {
-                              return value.join(', ');
-                            }
-                            return value || "-";
-                          })()
-                        }
-                      </TableCell>
-                    ))}
-                    <TableCell className="w-16">
-                      <div className="flex items-center justify-center">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <span className="sr-only">Open menu</span>
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuCheckboxItem 
-                              onClick={() => {
-                                setTagInput('');
-                                const addTagPrompt = prompt('Enter a tag to add to this contact:');
-                                if (addTagPrompt) {
-                                  addTagToContact(contact.email, addTagPrompt.trim());
-                                }
-                              }}
-                            >
-                              Add tag
-                            </DropdownMenuCheckboxItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                filteredContacts.map(contact => (
+                  <ContactRowMemo
+                    key={contact.email}
+                    contact={contact}
+                    visibleColumns={visibleColumns}
+                    isSelected={isContactSelected(contact.email)}
+                    onToggleSelection={toggleContactSelection}
+                    onAddTag={addTagToContact}
+                    getContactValue={getContactValue}
+                    columns={STANDARD_COLUMNS}
+                  />
                 ))
               ) : (
                 <TableRow>

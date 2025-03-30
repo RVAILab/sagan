@@ -4,6 +4,8 @@ This app is MOBILE FIRST, so design with that in mind.
 
 Be sure to check Next.js docs for the latest recommended approaches to Data Fetching, Rendering, and Dynamic Routing.
 
+Any individual component or file should be no more than about 200 lines. Beyond this you should refactor into smaller components.
+
 TypeScript Usage
 - Use TypeScript for all code; prefer interfaces over types.
 - Avoid enums; use maps instead.
