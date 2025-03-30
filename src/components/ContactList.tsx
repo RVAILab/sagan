@@ -31,7 +31,10 @@ interface Contact {
   country?: string;
   created_at?: string;
   updated_at?: string;
-  [key: string]: string | undefined;
+  tags?: string;
+  tags_array?: string[];
+  region?: string;
+  added_date?: string;
 }
 
 // Define column configuration
@@ -40,14 +43,22 @@ interface Column {
   label: string;
 }
 
-const AVAILABLE_COLUMNS: Column[] = [
+// Initial standard columns - include all possible standard fields here
+const STANDARD_COLUMNS: Column[] = [
   { key: "email", label: "Email" },
   { key: "first_name", label: "First Name" },
   { key: "last_name", label: "Last Name" },
   { key: "phone_number", label: "Phone" },
+  { key: "tags", label: "Tags" },
+  { key: "region", label: "Region" },
   { key: "city", label: "City" },
   { key: "state_province_region", label: "State" },
-  { key: "country", label: "Country" }
+  { key: "country", label: "Country" },
+  { key: "address_line_1", label: "Address" },
+  { key: "postal_code", label: "Postal Code" },
+  { key: "created_at", label: "Created Date" },
+  { key: "updated_at", label: "Updated Date" },
+  { key: "added_date", label: "Added Date" }
 ];
 
 const ContactList = () => {
@@ -60,7 +71,7 @@ const ContactList = () => {
   const [usingCachedData, setUsingCachedData] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<Set<keyof Contact>>(
-    new Set(["email", "first_name", "last_name"])
+    new Set(["email", "first_name", "last_name", "tags"])
   );
 
   // Toggle column visibility
@@ -91,7 +102,7 @@ const ContactList = () => {
       const columnsPreference = localStorage.getItem('sagan_visible_columns');
       if (columnsPreference) {
         try {
-          const savedColumns = JSON.parse(columnsPreference) as string[];
+          const savedColumns = JSON.parse(columnsPreference) as Array<keyof Contact>;
           setVisibleColumns(new Set(savedColumns));
         } catch (e) {
           console.error('Error parsing saved columns preference:', e);
@@ -108,7 +119,6 @@ const ContactList = () => {
       const cacheValid = cacheAge < 60 * 60 * 1000; // 1 hour in milliseconds
       
       if (cachedData && cacheValid) {
-        console.log('Using cached contacts data from localStorage');
         const parsedData = JSON.parse(cachedData);
         setContacts(parsedData);
         applyFiltersAndSort(parsedData, searchTerm, sortField, sortDirection);
@@ -122,7 +132,6 @@ const ContactList = () => {
         
         // Optionally, refresh in background if cache is older than 10 minutes
         if (cacheAge > 10 * 60 * 1000) {
-          console.log('Cache is older than 10 minutes, refreshing in background');
           refreshContactsFromAPI(false);
         }
         
@@ -147,13 +156,9 @@ const ContactList = () => {
     setUsingCachedData(false);
     
     try {
-      console.log('Starting contacts fetch from API...');
-      
       // First start the export job
       const exportResponse = await fetch('/api/contacts/get-all');
       const exportData = await exportResponse.json();
-      
-      console.log('Export response:', exportData);
       
       if (!exportData.success || !exportData.urls || exportData.urls.length === 0) {
         console.error('Failed to export contacts', exportData);
@@ -171,7 +176,6 @@ const ContactList = () => {
       });
       
       const downloadData = await downloadResponse.json();
-      console.log('Download response:', downloadData);
       
       if (!downloadData.success || !downloadData.data) {
         console.error('Failed to download contacts', downloadData);
@@ -181,14 +185,12 @@ const ContactList = () => {
       
       // Set the contacts
       const fetchedContacts = downloadData.data.contacts || [];
-      console.log(`Retrieved ${fetchedContacts.length} contacts from API`);
       
       // Cache the data in localStorage
       localStorage.setItem('sagan_contacts', JSON.stringify(fetchedContacts));
       const timestamp = new Date().getTime();
       localStorage.setItem('sagan_contacts_timestamp', timestamp.toString());
       setLastUpdated(new Date(timestamp).toLocaleString());
-      console.log('Contacts data cached to localStorage');
       
       setContacts(fetchedContacts);
       applyFiltersAndSort(fetchedContacts, searchTerm, sortField, sortDirection);
@@ -233,25 +235,58 @@ const ContactList = () => {
 
     // Apply sorting
     filtered = [...filtered].sort((a, b) => {
-      const aValue = a[sortBy] || "";
-      const bValue = b[sortBy] || "";
+      const aValue = a[sortBy];
+      const bValue = b[sortBy];
 
+      // Special handling for arrays
+      if (Array.isArray(aValue) || Array.isArray(bValue)) {
+        const aString = Array.isArray(aValue) ? aValue.join(', ') : (aValue || "");
+        const bString = Array.isArray(bValue) ? bValue.join(', ') : (bValue || "");
+        return direction === "asc" ? aString.localeCompare(bString) : bString.localeCompare(aString);
+      }
+
+      // Regular string comparison
+      const aString = aValue?.toString() || "";
+      const bString = bValue?.toString() || "";
+      
       if (direction === "asc") {
-        return aValue.localeCompare(bValue);
+        return aString.localeCompare(bString);
       } else {
-        return bValue.localeCompare(aValue);
+        return bString.localeCompare(aString);
       }
     });
 
     setFilteredContacts(filtered);
   };
 
-  // Fetch contacts on component mount
+  // Fetch contacts and custom fields on component mount
   useEffect(() => {
     fetchContacts();
-    // We only want to fetch contacts on mount
+    // We only want to fetch contacts and custom fields on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Add a function to safely access contact fields regardless of case
+  const getContactValue = (contact: Contact, key: string): string | string[] | undefined => {
+    // Try direct access first (lowercase keys as in our interface)
+    if (contact[key as keyof Contact] !== undefined) {
+      return contact[key as keyof Contact];
+    }
+    
+    // Try uppercase version (as might come from CSV)
+    const upperKey = key.toUpperCase();
+    if (typeof contact[upperKey as keyof Contact] !== 'undefined') {
+      return contact[upperKey as keyof Contact];
+    }
+    
+    // Try case-insensitive search as last resort
+    const matchingKey = Object.keys(contact).find(k => k.toLowerCase() === key.toLowerCase());
+    if (matchingKey) {
+      return contact[matchingKey as keyof Contact];
+    }
+    
+    return undefined;
+  };
 
   return (
     <div className="container mx-auto py-4">
@@ -298,7 +333,7 @@ const ContactList = () => {
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {AVAILABLE_COLUMNS.map((column) => (
+                {STANDARD_COLUMNS.map((column) => (
                   <DropdownMenuCheckboxItem
                     key={column.key}
                     checked={visibleColumns.has(column.key)}
@@ -323,7 +358,7 @@ const ContactList = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                {AVAILABLE_COLUMNS.filter(col => visibleColumns.has(col.key)).map(column => (
+                {STANDARD_COLUMNS.filter(col => visibleColumns.has(col.key)).map(column => (
                   <TableHead
                     key={column.key}
                     className={`cursor-pointer ${sortField === column.key ? "font-bold" : ""}`}
@@ -338,9 +373,41 @@ const ContactList = () => {
               {filteredContacts.length > 0 ? (
                 filteredContacts.map((contact, index) => (
                   <TableRow key={index}>
-                    {AVAILABLE_COLUMNS.filter(col => visibleColumns.has(col.key)).map(column => (
+                    {STANDARD_COLUMNS.filter(col => visibleColumns.has(col.key)).map(column => (
                       <TableCell key={column.key}>
-                        {contact[column.key] || "-"}
+                        {column.key === "tags" ? (
+                          <div className="flex flex-wrap gap-1">
+                            {contact.tags_array ? (
+                              // If tags_array exists, use it (our parsed format)
+                              (contact.tags_array as string[]).map((tag, i) => (
+                                <span key={i} className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs whitespace-nowrap">
+                                  {tag}
+                                </span>
+                              ))
+                            ) : getContactValue(contact, 'tags') ? (
+                              // Try to get tags with our helper function
+                              (typeof getContactValue(contact, 'tags') === 'string' 
+                                ? (getContactValue(contact, 'tags') as string).split(',') 
+                                : (getContactValue(contact, 'tags') as string[])
+                              ).map((tag: string, i: number) => (
+                                <span key={i} className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs whitespace-nowrap">
+                                  {tag.trim()}
+                                </span>
+                              ))
+                            ) : (
+                              <span>-</span>
+                            )}
+                          </div>
+                        ) : (
+                          // Use our helper function for all other values
+                          (() => {
+                            const value = getContactValue(contact, column.key as string);
+                            if (Array.isArray(value)) {
+                              return value.join(', ');
+                            }
+                            return value || "-";
+                          })()
+                        )}
                       </TableCell>
                     ))}
                   </TableRow>
