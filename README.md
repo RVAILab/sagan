@@ -92,13 +92,20 @@ The application handles the following data formats from SendGrid:
 
 ### Local Storage Caching
 
-To improve performance and provide limited offline capabilities:
+The application implements browser localStorage caching for contacts data:
 
-- Contacts data is cached in the browser's localStorage
-- Initial page loads use cached data if available and less than 1 hour old
-- Background refresh occurs for cached data older than 10 minutes
-- Cache reduces API calls to SendGrid and speeds up page loads
-- Approximately 5-10MB of storage is used depending on contacts volume
+- **Performance Optimization**: Contacts are stored locally to eliminate API calls on repeat visits
+- **Offline Support**: Basic browsing of contacts works without an internet connection
+- **Intelligent Cache Management**:
+  - Cache validity period: 1 hour
+  - Background refresh: Occurs automatically for cache older than 10 minutes
+  - Visual indicators: UI shows when you're viewing cached data
+  - Manual refresh: Force refresh available via refresh button
+- **Cache Storage**:
+  - Key: `sagan_contacts` - Stores the actual contact data
+  - Key: `sagan_contacts_timestamp` - Tracks when data was last updated
+
+This implementation significantly improves page load times while reducing API calls to SendGrid, which may have rate limits.
 
 ### Setting Up Your SendGrid Account
 
@@ -116,16 +123,25 @@ The contacts page provides a comprehensive interface for managing your contacts:
 - **Sort columns**: Click on column headers to sort by that field
 - **Customize columns**: Choose which fields to display in the table
 - **Responsive design**: Works on both desktop and mobile devices
+- **Cache indicators**: Visual badge shows when viewing cached data
+- **Last updated**: Timestamp shows when contact data was last refreshed
 
 ### Filtering and Searching
 
 - **Quick search**: Filter contacts by any field using the search box
 - **In-memory filtering**: Instant results without waiting for API calls
+- **Works offline**: All filtering and sorting works with cached data
 
 ### Selection and Bulk Actions
 
 - **Multi-select**: Choose multiple contacts using checkboxes
 - **Batch operations**: Perform actions on multiple contacts at once
+
+### Data Management
+
+- **Manual refresh**: Force refresh contact data from the SendGrid API
+- **Background refresh**: Automatic updates for stale data while browsing
+- **Cache persistence**: Data remains available between browser sessions
 
 ## Usage Guide
 
@@ -156,6 +172,14 @@ The contacts page provides a comprehensive interface for managing your contacts:
 3. Click column headers to sort by that field
 4. Use the Columns button to customize which fields are displayed
 5. Check boxes next to contacts to select them for batch operations
+
+### Working with Cached Data
+
+1. The contacts list initially loads from cache if available (indicated by a "Cached" badge)
+2. Last updated timestamp shows when the data was last refreshed
+3. Click the "Refresh" button to manually fetch the latest data from SendGrid
+4. For most operations, cached data will automatically update in the background if it's older than 10 minutes
+5. The application will work offline with cached data for basic browsing, searching, and sorting
 
 ## Deployment
 
