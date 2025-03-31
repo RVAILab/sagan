@@ -4,4 +4,6 @@ export * from './input';
 export * from './card';
 export * from './table';
 export * from './skeleton';
-export * from './dropdown-menu'; 
+export * from './dropdown-menu';
+export * from './checkbox';
+export * from './scroll-area'; 

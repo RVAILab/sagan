@@ -45,6 +45,7 @@ export default function RootLayout({
               <div className="space-x-4">
                 <Link href="/" className="hover:text-gray-300">Home</Link>
                 <Link href="/contacts" className="hover:text-gray-300">Contacts</Link>
+                <Link href="/segments" className="hover:text-gray-300">Segments</Link>
               </div>
             </div>
           </nav>
